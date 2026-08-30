@@ -40,3 +40,11 @@ description = "Generated build output, never committed"
 paths = [
   '''(^|/)(bin|dist|__pycache__)/''',
 ]
+# One commit predates this scan and carried a developer-machine path in a
+# test fixture. The fixture was scrubbed in a later commit; the history is
+# left as it is because that commit is already reachable from a tagged
+# release, and rewriting it would break every clone. Nothing else is
+# exempted.
+commits = [
+  "1ca855042732942359cb2af5e5c7d87699d35a95",
+]
