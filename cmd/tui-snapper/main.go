@@ -89,13 +89,13 @@ func parseFlags(args []string, out *os.File) (options, error) {
 		"privilege escalation prefix, e.g. \"sudo -n\" or \"\" to disable")
 	fs.BoolVar(&opts.showVersion, "version", false, "print the version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(out, "tui-snapper — btrfs snapshots, managed by snapper\n\n"+
+		_, _ = fmt.Fprintf(out, "tui-snapper — btrfs snapshots, managed by snapper\n\n"+
 			"Usage:\n  tui-snapper [flags]\n\nFlags:\n")
 		fs.PrintDefaults()
-		fmt.Fprintf(out, "\nsnapper reads its subvolumes directly, so this tool "+
+		_, _ = fmt.Fprintf(out, "\nsnapper reads its subvolumes directly, so this tool "+
 			"needs root: run it with sudo,\nor leave sudo = \"sudo -n\" configured. "+
 			"--demo needs neither.\n")
-		fmt.Fprintf(out, "\nConfiguration is read from %s, then %s, "+
+		_, _ = fmt.Fprintf(out, "\nConfiguration is read from %s, then %s, "+
 			"then TUI_SNAPPER_* in the environment.\n",
 			config.SystemPathFor(toolName), config.UserPathFor(toolName))
 	}
