@@ -25,6 +25,13 @@ matter. That is what this is for.
 make demo     # the whole UI, on sample data, with no btrfs and no root
 ```
 
+```console
+sudo tui-snapper                  # drive the machine's snapper
+tui-snapper --demo                # sample snapshots, no btrfs and no root
+sudo tui-snapper --check          # read snapper, print JSON, exit
+tui-snapper --report              # print what a bug report needs, exit
+```
+
 ## Install
 
 <!-- install:start -->
@@ -379,6 +386,47 @@ $ sudo tui-snapper --check | head -9
 That is what makes assertions like "the tool's snapshot count equals
 `snapper list`'s" possible, and it is what `test/smoke.sh` runs on each of the
 lab's three machines.
+
+### `--report`, for bug reports
+
+`--report` prints, in one block, everything a maintainer has to ask for
+otherwise: the tool and kit versions, the backend and the version probed off
+it, the distribution, the kernel, the terminal, the theme, the escalation
+prefix, whether the running binary came from a package, and the three settings
+that decide what every snapper command line looks like — the config it opens
+on, `no-dbus`, and where the boot menu is read from. It needs no privileges
+and reads no snapshot, so it works on the machine where the bug is — including
+one with no snapper installed at all, where the selection error is itself one
+of the lines.
+
+```console
+$ tui-snapper --report
+tui-snapper 0.1.3 (kit v0.2.9)
+backend: snapper 0.13.1
+mode: live
+distro: omarchy-server 4.0.1 (Omarchy Server)
+kernel: 6.19.14-1-default
+arch: x86_64
+locale: en_US.UTF-8
+term: xterm-256color
+theme: tokyo-night
+sudo: sudo -n
+root: no
+binary: /usr/bin/tui-snapper (packaged)
+snapper config: (first on the machine)
+no-dbus: no
+boot config: /boot/limine.conf
+```
+
+The block is written to be published as it is: it carries no hostname, user
+name, home path or address, and no environment variable beyond `LANG`,
+`LC_ALL`, `TERM` and `TERM_PROGRAM`. A binary living under your home directory
+is reported as being there without naming the path, and so is a boot
+configuration you have pointed somewhere private. `--report` works with
+`--demo` too, where it says so on the `mode` line.
+
+The bug form asks for this block first — see
+[`.github/ISSUE_TEMPLATE/bug_report.yml`](.github/ISSUE_TEMPLATE/bug_report.yml).
 
 ## Contributing
 

@@ -102,6 +102,35 @@ if command -v limine-snapper-sync >/dev/null && [[ "$subvolume" == "/" ]]; then
 fi
 echo "      limine-snapper-sync=$has_limine"
 
+# --- the report block ------------------------------------------------------
+#
+# --report is read-only and unprivileged, so it is smoked without sudo — which
+# matters more here than anywhere else in the family, because everything else
+# this tool does needs root: a user who cannot escalate is exactly the one who
+# most needs to be able to file a usable bug. What is asserted is that it names
+# the backend this machine drives, that it still answers under --demo, and that
+# it keeps its privacy promise — the block goes into a public issue, so a home
+# path or the host name appearing in it is a bug, not a cosmetic detail.
+check "report names the selected backend" \
+  "$bin --report" \
+  '^backend: snapper'
+
+check "report says the run was live" \
+  "$bin --report" \
+  '^mode: live$'
+
+check "report works in demo mode too" \
+  "$bin --demo --report" \
+  '^backend: demo$'
+
+check "and says so on the mode line" \
+  "$bin --demo --report" \
+  '^mode: demo'
+
+check "report leaks neither a home path nor the host name" \
+  "$bin --report | grep -cE '/home/|$(uname -n)' || true" \
+  '^0$'
+
 # A snapshot of our own, so the machine has something to read whatever state
 # it booted in, and so the description below is one nothing else could have
 # written. It is deleted again at the end.

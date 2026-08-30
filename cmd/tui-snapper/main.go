@@ -57,6 +57,7 @@ func defaults() map[string]string {
 type options struct {
 	demo        bool
 	check       bool
+	report      bool
 	config      string
 	bootConfig  string
 	noDBus      bool
@@ -77,6 +78,7 @@ func parseFlags(args []string, out *os.File) (options, error) {
 		"run against sample data, without touching anything")
 	fs.BoolVar(&opts.check, "check", false,
 		"read the backend, print the parsed model as JSON and exit")
+	fs.BoolVar(&opts.report, "report", false, reportUsage)
 	fs.StringVar(&opts.config, "config", "",
 		"snapper config to open on (overrides the config file)")
 	fs.StringVar(&opts.bootConfig, "boot-config", "",
@@ -138,17 +140,28 @@ func run(args []string) error {
 	}
 	applyOverrides(&cfg, opts)
 
-	backend, err := pickBackend(cfg, opts)
-	if err != nil {
-		return err
-	}
-
 	// The configured theme is handed to the kit through the same variable the
-	// user could set by hand, so precedence stays in one place.
+	// user could set by hand, so precedence stays in one place. It is set
+	// before the backend is built so --report can name the theme the UI would
+	// have used even on a machine where no backend can be.
 	if path := cfg.Theme(); path != "" {
 		if err := os.Setenv("TUI_THEME", path); err != nil {
 			return err
 		}
+	}
+
+	// --report is the non-interactive path that must work everywhere. It reads
+	// nothing privileged and it survives a machine with no snapper at all,
+	// because "there is nothing here to drive" is one of the things a bug
+	// report has to be able to say. So it comes before the backend is
+	// required.
+	if opts.report {
+		return runReport(cfg, opts, os.Stdout)
+	}
+
+	backend, err := pickBackend(cfg, opts)
+	if err != nil {
+		return err
 	}
 
 	wanted := cfg.String(keyConfig, "")
