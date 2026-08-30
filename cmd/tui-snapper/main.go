@@ -55,6 +55,7 @@ func defaults() map[string]string {
 // options holds the parsed command line.
 type options struct {
 	demo        bool
+	check       bool
 	config      string
 	bootConfig  string
 	noDBus      bool
@@ -73,6 +74,8 @@ func parseFlags(args []string, out *os.File) (options, error) {
 	fs.SetOutput(out)
 	fs.BoolVar(&opts.demo, "demo", false,
 		"run against sample data, without touching anything")
+	fs.BoolVar(&opts.check, "check", false,
+		"read the backend, print the parsed model as JSON and exit")
 	fs.StringVar(&opts.config, "config", "",
 		"snapper config to open on (overrides the config file)")
 	fs.StringVar(&opts.bootConfig, "boot-config", "",
@@ -148,6 +151,15 @@ func run(args []string) error {
 	}
 
 	wanted := cfg.String(keyConfig, "")
+
+	// --check is the non-interactive path: it runs the backend's real read
+	// path and prints, and never starts a terminal program. It is checked
+	// after the backend is built so that "snapper is not installed" is still
+	// reported as the failure it is.
+	if opts.check {
+		return runCheck(backend, wanted, os.Stdout)
+	}
+
 	program := tea.NewProgram(
 		newApp(backend, theme.New(), wanted), tea.WithAltScreen())
 	_, err = program.Run()

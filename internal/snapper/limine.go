@@ -43,9 +43,16 @@ var bootOptionKeys = map[string]bool{
 	"kernel_cmdline": true,
 }
 
-// idPattern matches the snapshot number in the titles that carry one, which
-// is every format except the timestamp-only one Omarchy uses.
+// idPattern matches the snapshot number in the titles that spell it out,
+// `ID=112 2026-08-25 10:59:59`.
 var idPattern = regexp.MustCompile(`\bID=(\d+)`)
+
+// leadingNumberPattern matches the number in the title format Omarchy Server
+// actually generates, captured from a real run of limine-snapper-sync:
+// `4 │ 2026-08-29 21:27:27` — the number, a U+2502 box-drawing separator (an
+// ASCII pipe in other builds), then the timestamp. The separator is required:
+// without it a timestamp-only title would read its year as the number.
+var leadingNumberPattern = regexp.MustCompile(`^(\d+)\s*[\x{2502}|]`)
 
 // subvolPattern matches the snapshot number in a boot line's rootflags, which
 // is where the number is recoverable when the title does not carry it:
@@ -186,14 +193,17 @@ func hasBootableChild(entries []limineEntry, index int) bool {
 	return false
 }
 
-// snapshotNumber recovers a snapshot's number. Most title formats carry it as
-// "ID=112"; the timestamp-only format Omarchy uses does not, and then the
-// number is read out of a child's rootflags, which always names the snapshot
-// subvolume.
+// snapshotNumber recovers a snapshot's number. Most title formats carry it,
+// either as "ID=112" or as a leading "4 │ "; the timestamp-only format does
+// not, and then the number is read out of a child's rootflags, which always
+// names the snapshot subvolume.
 func snapshotNumber(entries []limineEntry, index int) int {
-	if match := idPattern.FindStringSubmatch(entries[index].title); match != nil {
-		if number, err := strconv.Atoi(match[1]); err == nil {
-			return number
+	title := entries[index].title
+	for _, pattern := range []*regexp.Regexp{idPattern, leadingNumberPattern} {
+		if match := pattern.FindStringSubmatch(title); match != nil {
+			if number, err := strconv.Atoi(match[1]); err == nil {
+				return number
+			}
 		}
 	}
 	depth := entries[index].depth
