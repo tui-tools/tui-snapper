@@ -129,6 +129,7 @@
     }
   ],
   "install": {
+    "repo_url": "https://pkgs.tui.tools",
     "source": {
       "available": true,
       "command": "git clone https://github.com/tui-tools/tui-snapper\ncd tui-snapper && make demo",
@@ -142,7 +143,7 @@
       "requires_repo_setup": true,
       "command": "sudo pacman -S tui-snapper",
       "url": "https://pkgs.tui.tools/arch",
-      "note": "Needs the snapper package, which Arch already has."
+      "note": "Upgrades then arrive with the rest of your system updates."
     },
     "apt": {
       "available": false,
@@ -151,7 +152,7 @@
       "requires_repo_setup": true,
       "command": "sudo apt install tui-snapper",
       "url": "https://pkgs.tui.tools/deb",
-      "note": "Needs the snapper package."
+      "note": "Upgrades then arrive with the rest of your system updates."
     },
     "dnf": {
       "available": false,
@@ -160,7 +161,7 @@
       "requires_repo_setup": true,
       "command": "sudo dnf install tui-snapper",
       "url": "https://pkgs.tui.tools/rpm",
-      "note": "Needs the snapper package."
+      "note": "Upgrades then arrive with the rest of your system updates."
     },
     "zypper": {
       "available": false,
@@ -169,7 +170,7 @@
       "requires_repo_setup": true,
       "command": "sudo zypper install tui-snapper",
       "url": "https://pkgs.tui.tools/rpm",
-      "note": "openSUSE ships snapper by default, and is the layout snapper rollback was written for."
+      "note": "The rpm repository is shared with dnf; zypper support is not tested yet."
     },
     "binary": {
       "available": true,
