@@ -139,9 +139,7 @@ cd tui-snapper && make demo
 
 make demo needs no btrfs filesystem and no root.
 
-The distribution packages are not published yet. The commands below are here so
-you know what they will be; a package repository at `pkgs.tui.tools` is what
-turns them on.
+Not packaged for these yet; the static binary works everywhere in the meantime.
 
 ### openSUSE — coming soon
 
