@@ -26,6 +26,10 @@ type Real struct {
 	// systemctlErr holds why the timer states cannot be read, so the screen
 	// can say so instead of showing blank rows.
 	systemctlErr error
+	// cat reads the limine configuration when the process cannot open it
+	// itself. It is nil when no `cat` was found, and the direct read is
+	// then the only one attempted.
+	cat *runner.Runner
 	// bootConfig is the limine configuration the boot entries are read
 	// from. It is a field so a test can point it at a fixture.
 	bootConfig string
@@ -77,6 +81,17 @@ func New(sudoPrefix []string) (*Real, error) {
 		SearchPaths:     []string{"/usr/bin/systemctl", "/bin/systemctl"},
 		Timeout:         readTimeout,
 		PrivilegedReads: &unprivileged,
+	})
+
+	// The escalated fallback for the limine configuration. On an Omarchy
+	// install /boot is mode 0700, so an unprivileged process cannot open
+	// limine.conf at all — see readBootEntries. A machine with no `cat`
+	// simply has no fallback, which is not worth failing New over.
+	r.cat, _ = runner.New(runner.Options{
+		Bin:         "cat",
+		SearchPaths: []string{"/usr/bin/cat", "/bin/cat"},
+		SudoPrefix:  sudoPrefix,
+		Timeout:     readTimeout,
 	})
 	return r, nil
 }
@@ -198,7 +213,7 @@ func (r *Real) Platform(ctx context.Context, config Config) Platform {
 
 	// A boot menu that already lists the snapshots is the mechanism the user
 	// will actually use, so it is checked first.
-	if entries, err := ReadBootEntries(r.bootConfig); err == nil && len(entries) > 0 {
+	if entries := r.readBootEntries(ctx); len(entries) > 0 {
 		p.Kind = RollbackBootMenu
 		p.Entries = entries
 		p.Reason = fmt.Sprintf(
@@ -225,6 +240,37 @@ func (r *Real) Platform(ctx context.Context, config Config) Platform {
 			" exists but lists no snapshot entries."
 	}
 	return p
+}
+
+// readBootEntries reads the snapshot entries out of the limine configuration,
+// escalating when it has to.
+//
+// The direct read is tried first because it is what an already-root process
+// does, and it costs nothing. It fails on a real Omarchy install for a reason
+// that has nothing to do with the file: /boot is the mounted ESP, mode 0700
+// and owned by root, so an unprivileged process cannot even traverse into it.
+// Found in tui-lab on Omarchy Server 4.0.1, where the tool otherwise reported
+// a machine with a full boot menu as having none, and named the wrong
+// rollback mechanism as a result.
+//
+// A failure is deliberately not surfaced: "this machine has no limine boot
+// menu" is the same answer whether the file is absent or unreadable, and the
+// detection below then falls through to snapper's own rollback support.
+func (r *Real) readBootEntries(ctx context.Context) []BootEntry {
+	entries, err := ReadBootEntries(r.bootConfig)
+	if err == nil {
+		return entries
+	}
+	if !os.IsPermission(err) || r.cat == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+	out, err := r.cat.Read(ctx, "cat", "--", r.bootConfig)
+	if err != nil {
+		return nil
+	}
+	return ParseBootEntries(out)
 }
 
 // read runs a read-only snapper invocation and turns the two failures worth

@@ -234,17 +234,50 @@ make manifest      # validate tool.json against the family schema
 
 The parsers are table-tested against output captured from a real snapper
 0.13.1 on a real btrfs filesystem — `internal/snapper/testdata` holds those
-captures verbatim. The limine fixtures in `limine_test.go` are reconstructions
-rather than captures, and say so: there is no public dump of a generated
-`limine.conf` to paste in, so they were rebuilt from the writer that produces
-them and from limine's own `CONFIG.md`.
+captures verbatim, including
+`testdata/limine-omarchy-server.conf`: a `/boot/limine.conf` taken from an
+Omarchy Server 4.0.1 VM after four `snapper create` calls and one
+`limine-snapper-sync` run. The three layouts in `limine_test.go` beside it are
+reconstructions rather than captures, and say so: they were rebuilt from the
+writer that produces them and from limine's own `CONFIG.md`. The capture
+corrected one of them — the titles that machine generates are
+`4 │ 2026-08-29 21:27:27`, the snapshot number first and then the timestamp,
+and not the timestamp alone.
 
-Two things worth knowing if you extend a parser:
+Three things worth knowing if you extend a parser:
 
 - `snapper status` is **plain text even under `--jsonout`** in 0.13.1, so it
   is parsed line by line while `list` and `list-configs` are read as JSON;
 - `snapper --jsonout list` keys its array by **the config's own name**, not by
-  a fixed field, so `{"root": [...]}` is what comes back.
+  a fixed field, so `{"root": [...]}` is what comes back;
+- `/boot` is **mode 0700** on an Omarchy install, so reading `limine.conf`
+  needs the same escalation the snapper calls use. A tool that opens it
+  directly finds nothing and then reports the wrong rollback mechanism, which
+  is what `tui-lab` caught.
+
+### `--check`
+
+`--check` is the non-interactive read path, the same one `tui-firewall` and
+`tui-systemd` have. It drives the real backend, prints the parsed model as
+JSON and exits 0 or 1. It never builds and never runs a mutation, so it is
+safe anywhere.
+
+```console
+$ sudo tui-snapper --check | head -9
+{
+  "tool": "tui-snapper",
+  "version": "dev",
+  "backend": "snapper",
+  "describe": "snapper via /usr/bin/sudo -n",
+  "config": "root",
+  "subvolume": "/",
+  "configs": 1,
+  "config_list": [
+```
+
+That is what makes assertions like "the tool's snapshot count equals
+`snapper list`'s" possible, and it is what `test/smoke.sh` runs on each of the
+lab's three machines.
 
 ## License
 
