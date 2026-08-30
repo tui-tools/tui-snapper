@@ -176,6 +176,10 @@ func Spec(action Action) (ActionSpec, bool) {
 type Request struct {
 	// Config is the snapper config the command is scoped to. Required.
 	Config string
+	// Globals are the snapper-wide flags every invocation carries, such as
+	// --no-dbus. They belong before the sub-command, which is why they are
+	// part of the request rather than something a caller can bolt on later.
+	Globals []string
 	// Numbers are the snapshots the action applies to, in the order the
 	// action reads them. Delete takes one or more; a range action takes
 	// exactly two, from and to.
@@ -201,7 +205,7 @@ func BuildCommand(spec ActionSpec, req Request) (runner.Command, error) {
 	if req.Config == "" {
 		return runner.Command{}, fmt.Errorf("no config selected")
 	}
-	argv := []string{"snapper", "-c", req.Config}
+	argv := WithGlobals(req.Globals, "-c", req.Config)
 
 	switch spec.Action {
 	case Create:
@@ -356,27 +360,38 @@ func rollbackCommand(spec ActionSpec, req Request, argv []string) (runner.Comman
 	}, nil
 }
 
+// WithGlobals starts an argv: the binary, then the snapper-wide flags, then
+// the rest. snapper wants its global options before the sub-command, so this
+// is the one place that ordering is decided.
+func WithGlobals(globals []string, rest ...string) []string {
+	argv := make([]string, 0, 1+len(globals)+len(rest))
+	argv = append(argv, "snapper")
+	argv = append(argv, globals...)
+	return append(argv, rest...)
+}
+
 // StatusArgs is the read that lists what changed between two snapshots.
-func StatusArgs(config string, from, to int) []string {
-	return []string{"snapper", "-c", config, "status", fmt.Sprintf("%d..%d", from, to)}
+func StatusArgs(globals []string, config string, from, to int) []string {
+	return WithGlobals(globals, "-c", config, "status", fmt.Sprintf("%d..%d", from, to))
 }
 
 // DiffArgs is the read that shows one path's unified diff between two
 // snapshots. snapper's own usage is `snapper diff <n1>..<n2> [files]`: there
 // is no `--` separator, and passing one makes snapper look for a file called
 // "--".
-func DiffArgs(config string, from, to int, path string) []string {
-	return []string{"snapper", "-c", config, "diff", fmt.Sprintf("%d..%d", from, to), path}
+func DiffArgs(globals []string, config string, from, to int, path string) []string {
+	return WithGlobals(globals,
+		"-c", config, "diff", fmt.Sprintf("%d..%d", from, to), path)
 }
 
 // ListArgs is the read that returns the snapshots of a config as JSON.
-func ListArgs(config string) []string {
-	return []string{"snapper", "--jsonout", "-c", config, "list"}
+func ListArgs(globals []string, config string) []string {
+	return WithGlobals(globals, "--jsonout", "-c", config, "list")
 }
 
 // ListConfigsArgs is the read that returns every config as JSON.
-func ListConfigsArgs() []string {
-	return []string{"snapper", "--jsonout", "list-configs"}
+func ListConfigsArgs(globals []string) []string {
+	return WithGlobals(globals, "--jsonout", "list-configs")
 }
 
 // realNumbers rejects an empty selection and snapshot 0, which is the live

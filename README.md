@@ -197,8 +197,16 @@ empty list. `--demo` needs neither.
 config = "root"                    # the snapper config to open on
 sudo = "sudo -n"                   # "" runs snapper directly
 boot-config = "/boot/limine.conf"  # where the rollback screen reads the boot menu
+no-dbus = false                    # true where no snapperd is running
 theme = ""                         # empty follows the active Omarchy theme
 ```
+
+`no-dbus` is worth knowing about. snapper normally talks to `snapperd` over
+D-Bus; in a container, a chroot or a rescue shell there is no snapperd, and
+every command comes back as
+`Failure (org.freedesktop.DBus.Error.FileNotFound)`. `--no-dbus` makes snapper
+do the work itself. The flag becomes part of the previewed command line, so
+the dialog still shows exactly what will run.
 
 ## The rules it keeps
 

@@ -29,6 +29,10 @@ type Real struct {
 	// bootConfig is the limine configuration the boot entries are read
 	// from. It is a field so a test can point it at a fixture.
 	bootConfig string
+	// globals are the snapper-wide flags every invocation carries. They are
+	// part of the argv the dialog previews, so what runs is still exactly
+	// what was shown.
+	globals []string
 }
 
 // readTimeout bounds a read. Listing snapshots is fast; a diff of a large
@@ -91,14 +95,27 @@ func (r *Real) Run(ctx context.Context, cmd runner.Command) (string, error) {
 	return r.snapper.Run(ctx, cmd)
 }
 
-// Build turns an action into a previewable command.
+// Build turns an action into a previewable command, carrying the same global
+// flags the reads use.
 func (r *Real) Build(spec ActionSpec, req Request) (runner.Command, error) {
+	req.Globals = r.globals
 	return BuildCommand(spec, req)
+}
+
+// SetNoDBus makes every snapper invocation carry --no-dbus, which is what a
+// machine with no running snapperd needs: a container, a chroot, or a rescue
+// shell. The flag is part of the previewed argv, so the dialog still shows
+// exactly what will run.
+func (r *Real) SetNoDBus(enabled bool) {
+	r.globals = nil
+	if enabled {
+		r.globals = []string{"--no-dbus"}
+	}
 }
 
 // Configs lists the snapper configurations.
 func (r *Real) Configs(ctx context.Context) ([]Config, error) {
-	out, err := r.read(ctx, ListConfigsArgs()...)
+	out, err := r.read(ctx, ListConfigsArgs(r.globals)...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +127,7 @@ func (r *Real) Snapshots(ctx context.Context, config string) ([]Snapshot, error)
 	if config == "" {
 		return nil, fmt.Errorf("no config selected")
 	}
-	out, err := r.read(ctx, ListArgs(config)...)
+	out, err := r.read(ctx, ListArgs(r.globals, config)...)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +142,7 @@ func (r *Real) Status(ctx context.Context, config string, from, to int) ([]Chang
 	if from == to {
 		return nil, fmt.Errorf("a comparison needs two different snapshots")
 	}
-	out, err := r.read(ctx, StatusArgs(config, from, to)...)
+	out, err := r.read(ctx, StatusArgs(r.globals, config, from, to)...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +157,7 @@ func (r *Real) Diff(ctx context.Context, config string, from, to int, path strin
 	if path == "" {
 		return "", fmt.Errorf("no file selected")
 	}
-	return r.read(ctx, DiffArgs(config, from, to, path)...)
+	return r.read(ctx, DiffArgs(r.globals, config, from, to, path)...)
 }
 
 // Timers reports the state of snapper's systemd timers.
@@ -175,7 +192,7 @@ func (r *Real) Timers(ctx context.Context) []TimerState {
 // on the machine, and Reason says which evidence was used.
 func (r *Real) Platform(ctx context.Context, config Config) Platform {
 	p := Platform{BootConfig: r.bootConfig}
-	if out, err := r.read(ctx, "snapper", "--version"); err == nil {
+	if out, err := r.read(ctx, WithGlobals(r.globals, "--version")...); err == nil {
 		p.SnapperFlags = versionFlags(out)
 	}
 
