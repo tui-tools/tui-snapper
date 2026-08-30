@@ -1,20 +1,19 @@
-# GoReleaser template for a tui-tools tool.
+# GoReleaser for tui-snapper.
 #
-# Copy this to the tool's repository root as `.goreleaser.yaml` and replace
-# every tui-template with the tool name (`tui-firewall`). One repository, one
-# binary, one tag series: `git tag v0.1.0 && git push origin v0.1.0`.
+# One repository, one binary, one tag series:
+# `git tag v0.1.0 && git push origin v0.1.0`.
 version: 2
 
-project_name: tui-template
+project_name: tui-snapper
 
 before:
   hooks:
     - go mod download
 
 builds:
-  - id: tui-template
-    main: ./cmd/tui-template
-    binary: tui-template
+  - id: tui-snapper
+    main: ./cmd/tui-snapper
+    binary: tui-snapper
     env:
       # Static binaries: no libc dependency, one file to copy anywhere.
       - CGO_ENABLED=0
@@ -29,9 +28,9 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - id: tui-template
+  - id: tui-snapper
     ids:
-      - tui-template
+      - tui-snapper
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     formats:

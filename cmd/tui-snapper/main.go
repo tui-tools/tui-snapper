@@ -1,11 +1,12 @@
-// Command tui-template is the starting point for a new tui-tools tool. It
-// lists the files in a directory and can update a file's timestamp, which is
-// deliberately trivial: what matters is the shape around it, which is the same
-// in every tool of the family.
+// Command tui-snapper is a terminal UI for btrfs snapshots managed by
+// snapper. It lists the configs and their snapshots, compares any two of
+// them, and creates, deletes, relabels and cleans them up — with every
+// mutation shown as an exact snapper command line and confirmed first.
 //
-// Rename it, replace internal/tool with your own subject, and keep the
-// contract: read-only by default, and no change without a previewed and
-// confirmed command line.
+// It is deliberately generic: any distribution with snapper works, and the
+// one thing that really differs between an openSUSE-style layout and an
+// Omarchy one — how a rollback is performed — is detected and explained
+// rather than assumed.
 package main
 
 import (
@@ -16,25 +17,32 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tui-tools/tui-kit/config"
 	"github.com/tui-tools/tui-kit/theme"
-	"github.com/tui-tools/tui-template/internal/tool"
+	"github.com/tui-tools/tui-snapper/internal/snapper"
 )
 
 // toolName is the binary name, which is also the configuration directory:
-// /etc/tui-template/config.toml and ~/.config/tui-template/config.toml.
-const toolName = "tui-template"
+// /etc/tui-snapper/config.toml and ~/.config/tui-snapper/config.toml.
+const toolName = "tui-snapper"
 
-// keyDir is this tool's own configuration key. Yours go here.
-const keyDir = "dir"
+// This tool's own configuration keys.
+const (
+	// keyConfig is the snapper config to open on; empty picks the first one.
+	keyConfig = "config"
+	// keyBootConfig is the limine configuration the boot menu entries are
+	// read from, on a layout that has one.
+	keyBootConfig = "boot-config"
+)
 
 // version is stamped by the release build (-ldflags "-X main.version=…").
 var version = "dev"
 
 // defaults declares the configuration keys the tool understands. Only these
-// are read from the environment (TUI_TEMPLATE_DIR, …), so an unrelated
+// are read from the environment (TUI_SNAPPER_CONFIG, …), so an unrelated
 // variable can never leak into the configuration.
 func defaults() map[string]string {
 	return map[string]string{
-		keyDir:          ".",
+		keyConfig:       "",
+		keyBootConfig:   snapper.DefaultBootConfig,
 		config.KeySudo:  "sudo -n",
 		config.KeyTheme: "",
 	}
@@ -43,7 +51,8 @@ func defaults() map[string]string {
 // options holds the parsed command line.
 type options struct {
 	demo        bool
-	dir         string
+	config      string
+	bootConfig  string
 	themePath   string
 	sudo        string
 	showVersion bool
@@ -59,19 +68,24 @@ func parseFlags(args []string, out *os.File) (options, error) {
 	fs.SetOutput(out)
 	fs.BoolVar(&opts.demo, "demo", false,
 		"run against sample data, without touching anything")
-	fs.StringVar(&opts.dir, "dir", "",
-		"directory to list (overrides the config file)")
+	fs.StringVar(&opts.config, "config", "",
+		"snapper config to open on (overrides the config file)")
+	fs.StringVar(&opts.bootConfig, "boot-config", "",
+		"limine configuration to read the boot menu entries from")
 	fs.StringVar(&opts.themePath, "theme", "",
 		"path to an Omarchy-style colors.toml (overrides the config file)")
 	fs.StringVar(&opts.sudo, "sudo", "",
 		"privilege escalation prefix, e.g. \"sudo -n\" or \"\" to disable")
 	fs.BoolVar(&opts.showVersion, "version", false, "print the version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(out, "tui-template — a starting point for a tui-tools tool\n\n"+
-			"Usage:\n  tui-template [flags]\n\nFlags:\n")
+		fmt.Fprintf(out, "tui-snapper — btrfs snapshots, managed by snapper\n\n"+
+			"Usage:\n  tui-snapper [flags]\n\nFlags:\n")
 		fs.PrintDefaults()
+		fmt.Fprintf(out, "\nsnapper reads its subvolumes directly, so this tool "+
+			"needs root: run it with sudo,\nor leave sudo = \"sudo -n\" configured. "+
+			"--demo needs neither.\n")
 		fmt.Fprintf(out, "\nConfiguration is read from %s, then %s, "+
-			"then TUI_TEMPLATE_* in the environment.\n",
+			"then TUI_SNAPPER_* in the environment.\n",
 			config.SystemPathFor(toolName), config.UserPathFor(toolName))
 	}
 	if err := fs.Parse(args); err != nil {
@@ -92,8 +106,7 @@ func main() {
 	}
 }
 
-// run wires the configuration, the backend and the Bubble Tea program. Every
-// tool in the family has this function, and it is worth keeping it recognisable.
+// run wires the configuration, the backend and the Bubble Tea program.
 func run(args []string) error {
 	opts, err := parseFlags(args, os.Stdout)
 	if err != nil {
@@ -127,7 +140,9 @@ func run(args []string) error {
 		}
 	}
 
-	program := tea.NewProgram(newApp(backend, theme.New()), tea.WithAltScreen())
+	wanted := cfg.String(keyConfig, "")
+	program := tea.NewProgram(
+		newApp(backend, theme.New(), wanted), tea.WithAltScreen())
 	_, err = program.Run()
 	return err
 }
@@ -135,8 +150,11 @@ func run(args []string) error {
 // applyOverrides folds the command line into the configuration, which is the
 // last and highest-precedence layer.
 func applyOverrides(cfg *config.Config, opts options) {
-	if opts.dir != "" {
-		cfg.Set(keyDir, opts.dir)
+	if opts.config != "" {
+		cfg.Set(keyConfig, opts.config)
+	}
+	if opts.bootConfig != "" {
+		cfg.Set(keyBootConfig, opts.bootConfig)
 	}
 	if opts.themePath != "" {
 		cfg.Set(config.KeyTheme, opts.themePath)
@@ -149,9 +167,14 @@ func applyOverrides(cfg *config.Config, opts options) {
 }
 
 // pickBackend returns the demo backend or the real one.
-func pickBackend(cfg config.Config, opts options) (tool.Backend, error) {
+func pickBackend(cfg config.Config, opts options) (snapper.Backend, error) {
 	if opts.demo {
-		return tool.NewFake(), nil
+		return snapper.NewFake(), nil
 	}
-	return tool.New(cfg.String(keyDir, "."), cfg.SudoPrefix())
+	real, err := snapper.New(cfg.SudoPrefix())
+	if err != nil {
+		return nil, err
+	}
+	real.SetBootConfig(cfg.String(keyBootConfig, snapper.DefaultBootConfig))
+	return real, nil
 }

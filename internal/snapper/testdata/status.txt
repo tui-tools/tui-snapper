@@ -1,0 +1,3 @@
+c..... /srv/root/etc/conf
+-..... /srv/root/etc/doomed.conf
++..... /srv/root/etc/new.conf
