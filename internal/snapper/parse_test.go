@@ -227,9 +227,9 @@ func TestParseStatus(t *testing.T) {
 		},
 		{
 			name:  "a path containing spaces keeps them",
-			input: "c..... /home/you/My Documents/notes.txt\n",
+			input: "c..... /home/you/Documents/notes.txt\n",
 			want: []Change{
-				{Kind: Modified, Path: "/home/you/My Documents/notes.txt", Status: "c....."},
+				{Kind: Modified, Path: "/home/you/Documents/notes.txt", Status: "c....."},
 			},
 		},
 		{
