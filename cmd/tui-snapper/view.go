@@ -108,6 +108,11 @@ func (a *app) snapshotsHeader() string {
 	if timers := a.timerSummary(); timers != "" {
 		facts = append(facts, ui.Fact{Label: "timers", Value: timers})
 	}
+	// Which snapper is behind all of the above, and whether anyone has run
+	// this tool against it. A probe that found nothing adds no fact.
+	if a.backendCompat.Backend != "" {
+		facts = append(facts, ui.CompatFact(a.theme, a.backendCompat))
+	}
 
 	subtitle := a.config.Subvolume
 	if subtitle == "" {

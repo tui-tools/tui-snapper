@@ -21,7 +21,7 @@ import (
 func newTestApp(t *testing.T) (*app, *snapper.Fake) {
 	t.Helper()
 	fake := snapper.NewFake()
-	a := newApp(fake, theme.Theme{}, snapper.DemoConfig)
+	a := newApp(fake, theme.Theme{}, snapper.DemoConfig, testCompat(t, "snapper 0.13.1"))
 	a.width, a.height = 120, 30
 	drain(t, a, a.Init())
 	if a.config.Name != snapper.DemoConfig {

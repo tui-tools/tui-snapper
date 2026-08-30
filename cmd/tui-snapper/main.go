@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -152,16 +153,21 @@ func run(args []string) error {
 
 	wanted := cfg.String(keyConfig, "")
 
+	// The backend version is probed once, here, and used by both paths: the
+	// header shows it, --check reports it, and the smoke test records it as
+	// compatibility evidence.
+	backendCompat := probeCompat(context.Background(), backend.Name(), opts.demo)
+
 	// --check is the non-interactive path: it runs the backend's real read
 	// path and prints, and never starts a terminal program. It is checked
 	// after the backend is built so that "snapper is not installed" is still
 	// reported as the failure it is.
 	if opts.check {
-		return runCheck(backend, wanted, os.Stdout)
+		return runCheck(backend, wanted, backendCompat, os.Stdout)
 	}
 
 	program := tea.NewProgram(
-		newApp(backend, theme.New(), wanted), tea.WithAltScreen())
+		newApp(backend, theme.New(), wanted, backendCompat), tea.WithAltScreen())
 	_, err = program.Run()
 	return err
 }
