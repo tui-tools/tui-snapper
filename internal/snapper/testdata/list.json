@@ -1,0 +1,91 @@
+{
+  "data": [
+    {
+      "subvolume": "/srv/root",
+      "number": 0,
+      "default": false,
+      "active": false,
+      "type": "single",
+      "pre-number": null,
+      "date": "",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "",
+      "description": "current",
+      "userdata": null
+    },
+    {
+      "subvolume": "/srv/root",
+      "number": 1,
+      "default": false,
+      "active": false,
+      "type": "single",
+      "pre-number": null,
+      "date": "2026-08-29 23:39:29",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "number",
+      "description": "initial state",
+      "userdata": null
+    },
+    {
+      "subvolume": "/srv/root",
+      "number": 2,
+      "default": false,
+      "active": false,
+      "type": "pre",
+      "pre-number": null,
+      "date": "2026-08-29 23:39:29",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "number",
+      "description": "pacman -Syu",
+      "userdata": null
+    },
+    {
+      "subvolume": "/srv/root",
+      "number": 3,
+      "default": false,
+      "active": false,
+      "type": "post",
+      "pre-number": 2,
+      "date": "2026-08-29 23:39:29",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "number",
+      "description": "pacman -Syu",
+      "userdata": null
+    },
+    {
+      "subvolume": "/srv/root",
+      "number": 4,
+      "default": false,
+      "active": false,
+      "type": "single",
+      "pre-number": null,
+      "date": "2026-08-29 23:39:29",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "timeline",
+      "description": "before manual edit",
+      "userdata": {
+        "important": "yes",
+        "reason": "manual"
+      }
+    },
+    {
+      "subvolume": "/srv/root",
+      "number": 5,
+      "default": false,
+      "active": false,
+      "type": "single",
+      "pre-number": null,
+      "date": "2026-08-29 23:39:29",
+      "user": "root",
+      "used-space": null,
+      "cleanup": "",
+      "description": "after manual edit",
+      "userdata": null
+    }
+  ]
+}

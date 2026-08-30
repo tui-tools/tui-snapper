@@ -1,95 +1,131 @@
 {
   "schemaVersion": 1,
-  "name": "tui-template",
-  "binary": "tui-template",
-  "tagline": "A working skeleton for a new tui-tools tool",
-  "description": "The starting point for a new tool in the family. Press **Use this template**, rename it, replace one package, and you have a tool that looks and behaves like the rest.\n\nIt is not a pile of TODOs: it is a working tool. It lists the files in a directory and can update a file's timestamp, which is deliberately trivial — what matters is the shape around it, and that shape is already correct: the action table that generates the key map, the help screen and the confirm dialog; the backend interface with a real and a fake implementation; `--demo`; CI; and GoReleaser.\n\nThis `tool.json` is itself the example. It is a valid manifest, validated against [the schema](https://github.com/tui-tools/tui-kit/blob/main/schema/tool.schema.json) on every CI run, and the values are the ones you replace.",
-  "category": "template",
-  "homepage": "https://github.com/tui-tools/tui-template",
-  "repo": "https://github.com/tui-tools/tui-template",
+  "name": "tui-snapper",
+  "binary": "tui-snapper",
+  "tagline": "btrfs snapshots, managed by snapper, from the terminal",
+  "description": "A terminal UI for the btrfs snapshots `snapper` manages. It lists every config and its history — pre/post pairs from package upgrades next to the hourly timeline snapshots — compares any two of them, and shows what changed file by file, with a read-only diff for anything you want to look at closely.\n\nIt creates, deletes, relabels and cleans up snapshots too, and puts individual files back with `undochange` without touching the rest of the filesystem. Every one of those is shown as the exact `snapper` command line and confirmed before it runs; starting the tool only reads.\n\nRollback is the one thing that genuinely differs between machines, so it is detected rather than assumed: where `snapper rollback` is the mechanism it is offered with a full warning, and on an Omarchy or limine-snapper-sync layout the boot menu entries are read from `/boot/limine.conf` and shown read-only, because that is where the rollback really happens.\n\n`--demo` runs the whole UI against a sample history, so you can try it without a btrfs filesystem to risk.",
+  "category": "snapshots",
+  "homepage": "https://github.com/tui-tools/tui-snapper",
+  "repo": "https://github.com/tui-tools/tui-snapper",
   "license": "MIT",
   "platforms": ["linux/amd64", "linux/arm64"],
   "icon": "assets/icon.svg",
   "logo": "assets/logo.png",
   "screenshots": [
     {
-      "path": "docs/screenshots/tui-template-main.png",
-      "caption": "The list: the four bands every tool in the family draws"
+      "path": "docs/screenshots/tui-snapper-main.png",
+      "caption": "The snapshot history: pre/post pairs, timeline snapshots and the pinned ones, newest first"
     },
     {
-      "path": "docs/screenshots/tui-template-touch.png",
-      "caption": "The confirm dialog, showing the exact command line before it runs"
+      "path": "docs/screenshots/tui-snapper-diff.png",
+      "caption": "What changed between two snapshots, created and deleted and modified paths together"
     },
     {
-      "path": "docs/screenshots/tui-template-help.png",
+      "path": "docs/screenshots/tui-snapper-file.png",
+      "caption": "One file's unified diff between the two snapshots, read-only and scrollable"
+    },
+    {
+      "path": "docs/screenshots/tui-snapper-delete.png",
+      "caption": "The confirm dialog, showing the exact snapper command line before it runs"
+    },
+    {
+      "path": "docs/screenshots/tui-snapper-rollback.png",
+      "caption": "The rollback screen on a limine layout: the boot menu entries, read-only, and why"
+    },
+    {
+      "path": "docs/screenshots/tui-snapper-help.png",
       "caption": "The help screen, generated from the action table"
     }
   ],
   "keys": [
-    { "key": "t", "action": "Touch the selected file" },
+    { "key": "d / enter", "action": "Compare two snapshots; a post snapshot pairs with its own pre" },
+    { "key": "space", "action": "Mark a snapshot: two marks are a range, many are one delete" },
+    { "key": "c", "action": "Create a snapshot: description, type and cleanup algorithm" },
+    { "key": "D", "action": "Delete the selected snapshot, or every marked one" },
+    { "key": "e / a", "action": "Change a snapshot's description / cleanup algorithm" },
+    { "key": "C", "action": "Run a cleanup: number, timeline or empty-pre-post" },
+    { "key": "u", "action": "In the diff: put the selected files back with undochange" },
+    { "key": "R", "action": "Rollback, or how this machine actually rolls back" },
+    { "key": "s / T", "action": "Switch config / snapper's timers, read-only" },
     { "key": "/", "action": "Filter the list" },
-    { "key": "r / ctrl+r", "action": "Re-read the directory" },
-    { "key": "?", "action": "Help" },
-    { "key": "q", "action": "Quit" }
+    { "key": "? / q", "action": "Help / quit" }
   ],
   "install": {
     "source": {
       "available": true,
-      "command": "git clone https://github.com/tui-tools/tui-template\ncd tui-template && make demo",
-      "url": "https://github.com/tui-tools/tui-template",
-      "note": "Or press \"Use this template\" on GitHub, which is the point of it."
+      "command": "git clone https://github.com/tui-tools/tui-snapper\ncd tui-snapper && make demo",
+      "url": "https://github.com/tui-tools/tui-snapper",
+      "note": "make demo needs no btrfs filesystem and no root."
     },
     "pacman": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-snapper",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo pacman -S tui-template",
+      "command": "sudo pacman -S tui-snapper",
       "url": "https://pkgs.tui.tools/arch",
-      "note": "The template is never packaged. This entry shows your tool's shape."
+      "note": "Needs the snapper package, which Arch already has."
     },
     "apt": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-snapper",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo apt install tui-template",
+      "command": "sudo apt install tui-snapper",
       "url": "https://pkgs.tui.tools/deb",
-      "note": "The template is never packaged. This entry shows your tool's shape."
+      "note": "Needs the snapper package."
     },
     "dnf": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-snapper",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo dnf install tui-template",
+      "command": "sudo dnf install tui-snapper",
       "url": "https://pkgs.tui.tools/rpm",
-      "note": "The template is never packaged. This entry shows your tool's shape."
+      "note": "Needs the snapper package."
+    },
+    "zypper": {
+      "available": false,
+      "package": "tui-snapper",
+      "repo": "tui-tools",
+      "requires_repo_setup": true,
+      "command": "sudo zypper install tui-snapper",
+      "url": "https://pkgs.tui.tools/rpm",
+      "note": "openSUSE ships snapper by default, and is the layout snapper rollback was written for."
     },
     "binary": {
-      "available": false,
-      "pattern": "tui-template_{version}_linux_{arch}.tar.gz",
-      "command": "curl -fsSL https://github.com/tui-tools/tui-template/releases/download/v{version}/tui-template_{version}_linux_{arch}.tar.gz | tar -xz tui-template\nsudo install -m0755 tui-template /usr/local/bin/tui-template",
-      "url": "https://github.com/tui-tools/tui-template/releases",
-      "note": "The template is never released. Your tool is, once you tag v0.1.0."
+      "available": true,
+      "pattern": "tui-snapper_{version}_linux_{arch}.tar.gz",
+      "command": "curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v{version}/tui-snapper_{version}_linux_{arch}.tar.gz | tar -xz tui-snapper\nsudo install -m0755 tui-snapper /usr/local/bin/tui-snapper",
+      "url": "https://github.com/tui-tools/tui-snapper/releases",
+      "note": "Static, no runtime dependencies beyond the snapper binary it drives."
     }
   },
   "security": {
-    "needs_sudo": "Only the touch action escalates, and only when the configured prefix is non-empty. Listing a directory is an ordinary read. Replace this sentence with what your own tool escalates for.",
+    "needs_sudo": "Reads too, not only writes: snapper opens its subvolumes directly, so even listing snapshots needs root. Run with sudo, or leave sudo = \"sudo -n\" configured. create, delete, modify, cleanup, undochange and rollback change things, and each is confirmed first. --demo escalates nothing.",
     "preview_before_run": true,
     "no_daemon": true,
     "no_network": true,
     "static_binary": true,
     "signed_releases": false,
     "config_paths": [
-      "/etc/tui-template/config.toml",
-      "~/.config/tui-template/config.toml"
+      "/etc/tui-snapper/config.toml",
+      "~/.config/tui-snapper/config.toml"
     ]
   },
   "maintainers": [
     { "name": "Edimar Cardoso", "github": "edimarlnx" }
   ],
   "since": "2026-08-29",
-  "keywords": ["template", "scaffold", "bubbletea", "starter"],
-  "unreleased": true
+  "keywords": [
+    "snapper",
+    "btrfs",
+    "snapshots",
+    "rollback",
+    "backup",
+    "filesystem",
+    "omarchy",
+    "opensuse",
+    "limine"
+  ]
 }

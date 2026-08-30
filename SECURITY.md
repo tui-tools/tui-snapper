@@ -26,8 +26,11 @@ are all in that boundary:
   privilege level. These are terminal front ends, not a privilege boundary of
   their own.
 - Needing root to change the system. That is the design.
-- Locking yourself out of a machine by writing a rule that does so. The tool
-  previews and warns; it does not second-guess an administrator.
+- Losing data by confirming a delete, a cleanup, an undochange or a rollback.
+  The tool previews the exact command and warns; it does not second-guess an
+  administrator.
+- Anything `snapper` itself does with a command this tool built and the user
+  confirmed, including how a rollback interacts with your bootloader.
 
 ## Supported versions
 

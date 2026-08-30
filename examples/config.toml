@@ -1,20 +1,34 @@
-# tui-template configuration.
+# tui-snapper configuration.
 #
-# Read from /etc/tui-template/config.toml first, then
-# ~/.config/tui-template/config.toml, with the user file overriding the
-# machine-wide one. TUI_TEMPLATE_* environment variables override both, and
+# Read from /etc/tui-snapper/config.toml first, then
+# ~/.config/tui-snapper/config.toml, with the user file overriding the
+# machine-wide one. TUI_SNAPPER_* environment variables override both, and
 # command line flags override everything.
 
-# This tool's own key: the directory to list. Replace it with yours.
-dir = "."
+# The snapper config to open on. Empty opens the first one `snapper
+# list-configs` returns, which on most machines is "root".
+config = ""
 
-# Privilege escalation prefix used for actions; "" runs the command directly.
+# Privilege escalation prefix; "" runs snapper directly.
+#
+# Unlike most tools in the family this one needs it for reading as well as
+# writing: snapper opens its subvolumes directly, so an unprivileged
+# `snapper list` fails with "Operation not permitted". Either leave this set
+# and keep a sudo timestamp warm, or run the whole tool with sudo and set
+# this to "".
 sudo = "sudo -n"
+
+# The limine configuration the rollback screen reads its boot menu entries
+# from. It is read-only: on an Omarchy or limine-snapper-sync layout the boot
+# menu is where a rollback happens, limine-snapper-sync owns that file, and
+# tui-snapper only shows what is in it.
+boot-config = "/boot/limine.conf"
 
 # Path to an Omarchy-style colors.toml. Empty follows the active Omarchy
 # theme when present, and falls back to the built-in Tokyo Night palette.
 theme = ""
 
 # Every key can also be set in the environment, upper-cased and prefixed:
-#   TUI_TEMPLATE_DIR=/srv
-#   TUI_TEMPLATE_SUDO="doas"
+#   TUI_SNAPPER_CONFIG=home
+#   TUI_SNAPPER_SUDO="doas"
+#   TUI_SNAPPER_BOOT_CONFIG=/boot/EFI/limine.conf

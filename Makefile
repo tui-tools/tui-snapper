@@ -1,8 +1,8 @@
-# tui-template — build, test and lint.
+# tui-snapper — build, test and lint.
 
 GO      ?= go
 BIN     ?= bin
-TOOL    := tui-template
+TOOL    := tui-snapper
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 # The screenshot renderer is shared by the whole family and ships with the
@@ -65,7 +65,7 @@ tidy:
 screenshots: build
 	python3 $(KIT)/tools/render-screenshots.py \
 		--bin $(BIN)/$(TOOL) --name $(TOOL) --out docs/screenshots \
-		--screen main= --screen touch=t --screen help=?
+		--screen main= --screen diff=d --screen file=d\\r --screen delete=D --screen rollback=R --screen help=?
 
 ## readme: regenerate the Install section of the README from tool.json.
 readme:
