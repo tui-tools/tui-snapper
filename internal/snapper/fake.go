@@ -87,7 +87,8 @@ func (f *Fake) Snapshots(_ context.Context, config string) ([]Snapshot, error) {
 	snapshots, ok := f.snapshots[config]
 	if !ok {
 		// The real snapper's wording, so the demo shows the error the tool
-		// would really surface.
+		// would really surface. Capitalised and full-stopped on purpose.
+		//nolint:staticcheck // mirrors snapper's exact message
 		return nil, fmt.Errorf("Config '%s' not found.", config)
 	}
 	out := append([]Snapshot(nil), snapshots...)
@@ -173,6 +174,7 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 		return "", err
 	}
 	if _, ok := f.snapshots[config]; !ok {
+		//nolint:staticcheck // mirrors snapper's exact message
 		return "", fmt.Errorf("Config '%s' not found.", config)
 	}
 	if len(rest) == 0 {
@@ -191,6 +193,7 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 	case "undochange":
 		return "create:0 modify:1 delete:0", nil
 	case "rollback":
+		//nolint:staticcheck // mirrors snapper's exact message
 		return "", fmt.Errorf(
 			"Command 'rollback' cannot be used on a non-root subvolume /demo.")
 	default:
@@ -230,6 +233,7 @@ func (f *Fake) applyDelete(config string, args []string) (string, error) {
 	for _, arg := range args {
 		number, err := strconv.Atoi(arg)
 		if err != nil {
+			//nolint:staticcheck // mirrors snapper's exact message
 			return "", fmt.Errorf("Invalid snapshot '%s'.", arg)
 		}
 		wanted[number] = true
@@ -244,6 +248,7 @@ func (f *Fake) applyDelete(config string, args []string) (string, error) {
 		kept = append(kept, s)
 	}
 	if removed == 0 {
+		//nolint:staticcheck // mirrors snapper's exact message
 		return "", fmt.Errorf("Snapshot not found.")
 	}
 	f.snapshots[config] = kept
@@ -257,6 +262,7 @@ func (f *Fake) applyModify(config string, args []string) (string, error) {
 	}
 	number, err := strconv.Atoi(args[len(args)-1])
 	if err != nil {
+		//nolint:staticcheck // mirrors snapper's exact message
 		return "", fmt.Errorf("Invalid snapshot '%s'.", args[len(args)-1])
 	}
 	for i := range f.snapshots[config] {
@@ -271,6 +277,7 @@ func (f *Fake) applyModify(config string, args []string) (string, error) {
 		}
 		return "", nil
 	}
+	//nolint:staticcheck // mirrors snapper's exact message
 	return "", fmt.Errorf("Snapshot not found.")
 }
 
