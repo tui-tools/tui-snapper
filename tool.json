@@ -86,6 +86,48 @@
       "action": "Help / quit"
     }
   ],
+  "backends": [
+    {
+      "name": "snapper",
+      "binary": "snapper",
+      "versionCommand": [
+        "snapper",
+        "--version"
+      ],
+      "versionRegex": "snapper ([0-9][0-9.]*)",
+      "minimum": "0.8.6",
+      "searchPaths": [
+        "/usr/bin/snapper",
+        "/sbin/snapper",
+        "/usr/sbin/snapper"
+      ],
+      "features": [
+        {
+          "name": "undochange-root-paths",
+          "since": "0.10.6"
+        }
+      ],
+      "notes": [
+        {
+          "range": "<0.8.6",
+          "impact": "snapper has no `--jsonout`, and both the config list and the snapshot list are read as JSON, so nothing can be listed at all"
+        },
+        {
+          "range": "<0.10.6",
+          "impact": "`snapper undochange` cannot recreate a path that sits directly under the subvolume root, so putting back a deleted top-level file or directory fails with \"failed to create\""
+        },
+        {
+          "range": "<0.10.7",
+          "impact": "`snapper diff` is broken for LVM-based configs, so the file view comes back empty there even when the compare screen lists the change"
+        }
+      ],
+      "tested": [
+        "0.10.6",
+        "0.13.0",
+        "0.13.1"
+      ]
+    }
+  ],
   "install": {
     "source": {
       "available": true,

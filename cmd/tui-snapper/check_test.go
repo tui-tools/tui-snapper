@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tui-tools/tui-kit/compat"
 	"github.com/tui-tools/tui-snapper/internal/snapper"
 )
 
@@ -13,7 +14,7 @@ import (
 func decodeCheck(t *testing.T, wanted string) checkReport {
 	t.Helper()
 	var out bytes.Buffer
-	if err := runCheck(snapper.NewFake(), wanted, &out); err != nil {
+	if err := runCheck(snapper.NewFake(), wanted, compat.Result{}, &out); err != nil {
 		t.Fatalf("runCheck: %v", err)
 	}
 	var report checkReport
@@ -77,7 +78,7 @@ func TestRunCheckReportsThePlatform(t *testing.T) {
 
 func TestRunCheckRejectsAnUnknownConfig(t *testing.T) {
 	var out bytes.Buffer
-	err := runCheck(snapper.NewFake(), "not-a-config", &out)
+	err := runCheck(snapper.NewFake(), "not-a-config", compat.Result{}, &out)
 	if err == nil {
 		t.Fatal("an unknown config was accepted")
 	}

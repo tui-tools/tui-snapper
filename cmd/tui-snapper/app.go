@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tui-tools/tui-kit/compat"
 	"github.com/tui-tools/tui-kit/runner"
 	"github.com/tui-tools/tui-kit/theme"
 	"github.com/tui-tools/tui-kit/ui"
@@ -64,6 +65,10 @@ type app struct {
 	visible   []snapper.Snapshot
 	timers    []snapper.TimerState
 	platform  snapper.Platform
+
+	// backendCompat is what the version probe found, rendered in the header
+	// and consulted for the capabilities the running snapper has.
+	backendCompat compat.Result
 
 	width, height int
 	// cursor and offset drive the snapshot list; the diff view and the file
@@ -154,16 +159,21 @@ type ranMsg struct {
 
 // newApp builds the model around a backend. wanted is the config named on the
 // command line, and is empty when the tool should pick one itself.
-func newApp(backend snapper.Backend, th theme.Theme, wanted string) *app {
+// backendCompat is what the startup version probe found; the zero value is a
+// tool that could not read a version, which renders no badge and gates
+// nothing.
+func newApp(backend snapper.Backend, th theme.Theme, wanted string,
+	backendCompat compat.Result) *app {
 	a := &app{
-		backend:   backend,
-		theme:     th,
-		width:     80,
-		height:    24,
-		loading:   true,
-		marks:     map[int]bool{},
-		fileMarks: map[string]bool{},
-		config:    snapper.Config{Name: wanted},
+		backend:       backend,
+		theme:         th,
+		width:         80,
+		height:        24,
+		loading:       true,
+		marks:         map[int]bool{},
+		fileMarks:     map[string]bool{},
+		config:        snapper.Config{Name: wanted},
+		backendCompat: backendCompat,
 	}
 	if th.Warning != "" {
 		a.setStatus(ui.StatusWarn, th.Warning)
@@ -898,12 +908,48 @@ func (a *app) previewPending() tea.Cmd {
 	a.mode = modeConfirm
 	a.confirm = ui.Confirm{
 		Title:   cmd.Description,
-		Body:    p.spec.Body,
+		Body:    a.confirmBody(p),
 		Command: a.backend.Preview(cmd),
 		Danger:  cmd.Destructive,
 		Payload: cmd,
 	}
 	return nil
+}
+
+// confirmBody is the action's own explanation, plus the caveat that applies to
+// the snapper this machine is running.
+//
+// The only one today is gh#openSUSE/snapper#168, fixed in 0.10.6: undochange
+// cannot recreate a path whose parent is the subvolume root, and it fails
+// after the user confirmed rather than before. The version that has it is
+// named in the manifest, not here, so a capability the probe could not read is
+// assumed present and the dialog stays quiet.
+func (a *app) confirmBody(p *pending) string {
+	body := p.spec.Body
+	if p.spec.Action != snapper.UndoChange {
+		return body
+	}
+	if a.backendCompat.Caps().Has("undochange-root-paths") {
+		return body
+	}
+	if !anyRootPath(p.req.Files) {
+		return body
+	}
+	return body + "\n\nThis snapper is older than 0.10.6, where `undochange` " +
+		"could not recreate a path directly under the subvolume root: a " +
+		"selected top-level path may come back as \"failed to create\"."
+}
+
+// anyRootPath reports whether a path sits directly under the subvolume root,
+// which is the shape the pre-0.10.6 undochange could not recreate.
+func anyRootPath(files []string) bool {
+	for _, file := range files {
+		trimmed := strings.TrimPrefix(file, "/")
+		if trimmed != "" && !strings.Contains(trimmed, "/") {
+			return true
+		}
+	}
+	return false
 }
 
 // cancelPending abandons a half-collected action.

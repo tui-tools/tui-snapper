@@ -17,6 +17,8 @@
 set -uo pipefail
 
 bin="${TUI_LAB_BIN:-tui-snapper}"
+# TOOL is the manifest name, which is what a compatibility result is keyed on.
+TOOL=tui-snapper
 pass=0
 fail=0
 
@@ -33,6 +35,39 @@ check() {
     printf 'FAIL  %s (exit %d)\n' "$label" "$status"
     sed 's/^/      | /' <<<"$output" | head -12
     fail=$((fail + 1))
+  fi
+}
+
+# --- compatibility evidence -------------------------------------------------
+#
+# The manifest's `tested` list is generated, not claimed: it is rebuilt from
+# compat/results.jsonl by tui-kit/tools/compat-sync.py, and this is where a
+# line of that file comes from. The version recorded is the one the tool itself
+# probed, read back out of --check, so it describes the machine that really ran
+# the suite rather than what the tester assumed was installed.
+#
+# The line is printed behind a `compat-result:` prefix so it survives the trip
+# out of the guest through the lab's per-VM log, and appended to
+# $TUI_COMPAT_RESULTS as well for a run outside the lab.
+record_compat() {
+  local report="$1" outcome="$2" backend version distro today block
+  block=$(sed -n '/"compat": {/,/^  }/p' <<<"$report")
+  backend=$(sed -n 's/.*"backend": "\([^"]*\)".*/\1/p' <<<"$block" | head -1)
+  version=$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' <<<"$block" | head -1)
+  if [[ -z $backend || -z $version ]]; then
+    echo "      no version was probed, so no compatibility result is recorded"
+    return
+  fi
+
+  distro=$(. /etc/os-release && echo "${ID}-${VERSION_ID:-rolling}")
+  today=$(date -u +%Y-%m-%d)
+  local line
+  line=$(printf '{"backend":"%s","date":"%s","distro":"%s","result":"%s","suite":"smoke","tool":"%s","version":"%s"}' \
+    "$backend" "$today" "$distro" "$outcome" "$TOOL" "$version")
+
+  printf 'compat-result: %s\n' "$line"
+  if [[ -n ${TUI_COMPAT_RESULTS:-} ]]; then
+    printf '%s\n' "$line" >>"$TUI_COMPAT_RESULTS"
   fi
 }
 
@@ -196,6 +231,22 @@ check "the status read path runs against two real snapshots" \
 check "an unknown config is refused by name" \
   "$bin --check --config no-such-config; [[ \$? -ne 0 ]]" \
   'no-such-config'
+
+# 11. The startup version probe found this machine's snapper. The version is
+#     what the compatibility record below is keyed on, so an empty probe is a
+#     failure worth naming rather than a silently missing line.
+snapper_version=$(snapper --version | sed -n 's/^snapper \([0-9][0-9.]*\).*/\1/p' | head -1)
+check "the probed version matches \`snapper --version\` ($snapper_version)" \
+  "printf '%s' \"\$report\" | sed -n '/\"compat\": {/,/^  }/p'" \
+  "\"version\": \"$snapper_version\""
+
+# The line the lab carries back out, and `make compat` turns into the manifest's
+# tested list. The report is the same capture every assertion above used.
+if [[ $fail -eq 0 ]]; then
+  record_compat "$report" pass
+else
+  record_compat "$report" fail
+fi
 
 echo "--- tui-snapper: $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

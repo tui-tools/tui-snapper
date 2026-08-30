@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/tui-tools/tui-kit/compat"
 	"github.com/tui-tools/tui-snapper/internal/snapper"
 )
 
@@ -51,6 +52,11 @@ type checkReport struct {
 	BootEntries []snapper.BootEntry `json:"boot_entries"`
 	// SnapperFlags are the feature flags `snapper --version` reported.
 	SnapperFlags []string `json:"snapper_flags"`
+	// Compat is what the backend version probe found. It is reported rather
+	// than asserted: an untested version is a fact about the machine, not a
+	// failure of the read path. It is also where the smoke test reads the
+	// version it records as compatibility evidence.
+	Compat compat.Result `json:"compat"`
 	// Timers is the read-only state of the timeline and cleanup units.
 	Timers []snapper.TimerState `json:"timers"`
 	// Model is the parsed snapshot list in full.
@@ -63,7 +69,8 @@ type checkReport struct {
 //
 // It returns an error when the backend cannot be read, which main turns into
 // a non-zero exit — so a caller can treat the exit code alone as the verdict.
-func runCheck(backend snapper.Backend, wanted string, out io.Writer) error {
+func runCheck(backend snapper.Backend, wanted string,
+	backendCompat compat.Result, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
 
@@ -113,6 +120,7 @@ func runCheck(backend snapper.Backend, wanted string, out io.Writer) error {
 		BootConfig:   platform.BootConfig,
 		BootEntries:  platform.Entries,
 		SnapperFlags: platform.SnapperFlags,
+		Compat:       backendCompat,
 		Timers:       backend.Timers(ctx),
 		Model:        snapshots,
 	}
