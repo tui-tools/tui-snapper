@@ -2,6 +2,10 @@
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tui-tools/tui-snapper/badge)](https://scorecard.dev/viewer/?uri=github.com/tui-tools/tui-snapper)
 
+> **Beta.** Beta: the family is days old and still changing. Package names,
+> flags and keys may move without notice until 1.0. Pin versions, and report
+> what breaks.
+
 # tui-snapper
 
 btrfs snapshots, managed by [snapper](http://snapper.io/), from the terminal.
@@ -126,7 +130,7 @@ Upgrades then arrive with the rest of your system updates.
 ### Any distribution, static binary
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v0.1.1/tui-snapper_0.1.1_linux_amd64.tar.gz | tar -xz tui-snapper
+curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v0.1.2/tui-snapper_0.1.2_linux_amd64.tar.gz | tar -xz tui-snapper
 sudo install -m0755 tui-snapper /usr/local/bin/tui-snapper
 ```
 
@@ -374,6 +378,15 @@ $ sudo tui-snapper --check | head -9
 That is what makes assertions like "the tool's snapshot count equals
 `snapper list`'s" possible, and it is what `test/smoke.sh` runs on each of the
 lab's three machines.
+
+## Contributing
+
+Contributions arrive as pull requests, and the guide the whole family follows is
+[CONTRIBUTING.md](https://github.com/tui-tools/tui-kit/blob/main/CONTRIBUTING.md)
+in tui-kit: it covers the branch, the checks a change has to pass and how the
+commits are written. A vulnerability goes to
+[SECURITY.md](https://github.com/tui-tools/tui-kit/blob/main/SECURITY.md)
+instead, never into a public issue.
 
 ## License
 
