@@ -466,10 +466,10 @@ func TestViewRendersAtEveryWidth(t *testing.T) {
 		{"configs", func() { a.mode = modeConfigs }},
 		{"timers", func() { a.mode = modeTimers }},
 		{"rollback", func() { a.mode = modeRollback }},
-		// The help screen is deliberately not in this list: the kit's
-		// HelpScreen sizes its panel to its longest line and ignores the
-		// width it is given, so asserting on it here would be asserting on
-		// the kit rather than on this tool.
+		// Back in the list since tui-kit v0.1.3: HelpScreen used to size its
+		// panel to its longest line and ignore the width it was given, so the
+		// help screen overflowed here through no fault of this tool.
+		{"help", func() { a.mode = modeHelp }},
 	}
 	for _, width := range []int{40, 60, 80, 120, 200} {
 		for _, m := range modes {
