@@ -1,5 +1,7 @@
 <img src="assets/logo.png" alt="tui-snapper" width="240">
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tui-tools/tui-snapper/badge)](https://scorecard.dev/viewer/?uri=github.com/tui-tools/tui-snapper)
+
 # tui-snapper
 
 btrfs snapshots, managed by [snapper](http://snapper.io/), from the terminal.

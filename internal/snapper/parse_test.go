@@ -16,7 +16,7 @@ import (
 // golden reads one captured sample.
 func golden(t *testing.T, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name))
+	data, err := os.ReadFile(filepath.Join("testdata", name)) //nolint:gosec // every name is a literal in the tests below, and testdata is in the repository
 	if err != nil {
 		t.Fatalf("read %s: %v", name, err)
 	}
