@@ -31,6 +31,9 @@ const (
 	// keyBootConfig is the limine configuration the boot menu entries are
 	// read from, on a layout that has one.
 	keyBootConfig = "boot-config"
+	// keyNoDBus makes every snapper call carry --no-dbus, for a machine
+	// with no running snapperd.
+	keyNoDBus = "no-dbus"
 )
 
 // version is stamped by the release build (-ldflags "-X main.version=…").
@@ -43,6 +46,7 @@ func defaults() map[string]string {
 	return map[string]string{
 		keyConfig:       "",
 		keyBootConfig:   snapper.DefaultBootConfig,
+		keyNoDBus:       "false",
 		config.KeySudo:  "sudo -n",
 		config.KeyTheme: "",
 	}
@@ -53,6 +57,7 @@ type options struct {
 	demo        bool
 	config      string
 	bootConfig  string
+	noDBus      bool
 	themePath   string
 	sudo        string
 	showVersion bool
@@ -72,6 +77,8 @@ func parseFlags(args []string, out *os.File) (options, error) {
 		"snapper config to open on (overrides the config file)")
 	fs.StringVar(&opts.bootConfig, "boot-config", "",
 		"limine configuration to read the boot menu entries from")
+	fs.BoolVar(&opts.noDBus, "no-dbus", false,
+		"pass --no-dbus to snapper, for a machine with no running snapperd")
 	fs.StringVar(&opts.themePath, "theme", "",
 		"path to an Omarchy-style colors.toml (overrides the config file)")
 	fs.StringVar(&opts.sudo, "sudo", "",
@@ -156,6 +163,9 @@ func applyOverrides(cfg *config.Config, opts options) {
 	if opts.bootConfig != "" {
 		cfg.Set(keyBootConfig, opts.bootConfig)
 	}
+	if opts.noDBus {
+		cfg.Set(keyNoDBus, "true")
+	}
 	if opts.themePath != "" {
 		cfg.Set(config.KeyTheme, opts.themePath)
 	}
@@ -176,5 +186,6 @@ func pickBackend(cfg config.Config, opts options) (snapper.Backend, error) {
 		return nil, err
 	}
 	real.SetBootConfig(cfg.String(keyBootConfig, snapper.DefaultBootConfig))
+	real.SetNoDBus(cfg.Bool(keyNoDBus, false))
 	return real, nil
 }

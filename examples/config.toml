@@ -24,6 +24,14 @@ sudo = "sudo -n"
 # tui-snapper only shows what is in it.
 boot-config = "/boot/limine.conf"
 
+# Pass --no-dbus to every snapper call. snapper normally talks to snapperd
+# over D-Bus; a container, a chroot or a rescue shell has no snapperd running,
+# and snapper answers every command with
+# "Failure (org.freedesktop.DBus.Error.FileNotFound)". Set this there. The
+# flag is part of the previewed command line, so what runs is still exactly
+# what the dialog showed.
+no-dbus = false
+
 # Path to an Omarchy-style colors.toml. Empty follows the active Omarchy
 # theme when present, and falls back to the built-in Tokyo Night palette.
 theme = ""
@@ -32,3 +40,4 @@ theme = ""
 #   TUI_SNAPPER_CONFIG=home
 #   TUI_SNAPPER_SUDO="doas"
 #   TUI_SNAPPER_BOOT_CONFIG=/boot/EFI/limine.conf
+#   TUI_SNAPPER_NO_DBUS=true

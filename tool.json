@@ -8,7 +8,10 @@
   "homepage": "https://github.com/tui-tools/tui-snapper",
   "repo": "https://github.com/tui-tools/tui-snapper",
   "license": "MIT",
-  "platforms": ["linux/amd64", "linux/arm64"],
+  "platforms": [
+    "linux/amd64",
+    "linux/arm64"
+  ],
   "icon": "assets/icon.svg",
   "logo": "assets/logo.png",
   "screenshots": [
@@ -38,17 +41,50 @@
     }
   ],
   "keys": [
-    { "key": "d / enter", "action": "Compare two snapshots; a post snapshot pairs with its own pre" },
-    { "key": "space", "action": "Mark a snapshot: two marks are a range, many are one delete" },
-    { "key": "c", "action": "Create a snapshot: description, type and cleanup algorithm" },
-    { "key": "D", "action": "Delete the selected snapshot, or every marked one" },
-    { "key": "e / a", "action": "Change a snapshot's description / cleanup algorithm" },
-    { "key": "C", "action": "Run a cleanup: number, timeline or empty-pre-post" },
-    { "key": "u", "action": "In the diff: put the selected files back with undochange" },
-    { "key": "R", "action": "Rollback, or how this machine actually rolls back" },
-    { "key": "s / T", "action": "Switch config / snapper's timers, read-only" },
-    { "key": "/", "action": "Filter the list" },
-    { "key": "? / q", "action": "Help / quit" }
+    {
+      "key": "d / enter",
+      "action": "Compare two snapshots; a post snapshot pairs with its own pre"
+    },
+    {
+      "key": "space",
+      "action": "Mark a snapshot: two marks are a range, many are one delete"
+    },
+    {
+      "key": "c",
+      "action": "Create a snapshot: description, type and cleanup algorithm"
+    },
+    {
+      "key": "D",
+      "action": "Delete the selected snapshot, or every marked one"
+    },
+    {
+      "key": "e / a",
+      "action": "Change a snapshot's description / cleanup algorithm"
+    },
+    {
+      "key": "C",
+      "action": "Run a cleanup: number, timeline or empty-pre-post"
+    },
+    {
+      "key": "u",
+      "action": "In the diff: put the selected files back with undochange"
+    },
+    {
+      "key": "R",
+      "action": "Rollback, or how this machine actually rolls back"
+    },
+    {
+      "key": "s / T",
+      "action": "Switch config / snapper's timers, read-only"
+    },
+    {
+      "key": "/",
+      "action": "Filter the list"
+    },
+    {
+      "key": "? / q",
+      "action": "Help / quit"
+    }
   ],
   "install": {
     "source": {
@@ -114,7 +150,10 @@
     ]
   },
   "maintainers": [
-    { "name": "Edimar Cardoso", "github": "edimarlnx" }
+    {
+      "name": "Edimar Cardoso",
+      "github": "edimarlnx"
+    }
   ],
   "since": "2026-08-29",
   "keywords": [
@@ -126,6 +165,7 @@
     "filesystem",
     "omarchy",
     "opensuse",
-    "limine"
+    "limine",
+    "limine-snapper-sync"
   ]
 }

@@ -259,14 +259,21 @@ func TestReadArgs(t *testing.T) {
 		got  []string
 		want []string
 	}{
-		{"list-configs", ListConfigsArgs(),
+		{"list-configs", ListConfigsArgs(nil),
 			[]string{"snapper", "--jsonout", "list-configs"}},
-		{"list", ListArgs("root"),
+		{"list", ListArgs(nil, "root"),
 			[]string{"snapper", "--jsonout", "-c", "root", "list"}},
-		{"status", StatusArgs("root", 46, 47),
+		{"status", StatusArgs(nil, "root", 46, 47),
 			[]string{"snapper", "-c", "root", "status", "46..47"}},
-		{"diff", DiffArgs("root", 46, 47, "/etc/fstab"),
+		{"diff", DiffArgs(nil, "root", 46, 47, "/etc/fstab"),
 			[]string{"snapper", "-c", "root", "diff", "46..47", "/etc/fstab"}},
+
+		// A global flag goes before the sub-command, on the reads and on the
+		// mutations alike, because that is where snapper wants it.
+		{"list-configs with --no-dbus", ListConfigsArgs([]string{"--no-dbus"}),
+			[]string{"snapper", "--no-dbus", "--jsonout", "list-configs"}},
+		{"status with --no-dbus", StatusArgs([]string{"--no-dbus"}, "root", 46, 47),
+			[]string{"snapper", "--no-dbus", "-c", "root", "status", "46..47"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -275,12 +282,29 @@ func TestReadArgs(t *testing.T) {
 			}
 		})
 	}
-	for _, argv := range [][]string{DiffArgs("root", 1, 2, "/x"), StatusArgs("root", 1, 2)} {
+	for _, argv := range [][]string{
+		DiffArgs(nil, "root", 1, 2, "/x"), StatusArgs(nil, "root", 1, 2)} {
 		for _, arg := range argv {
 			if arg == "--" {
 				t.Errorf("%q carries a -- separator snapper does not accept", argv)
 			}
 		}
+	}
+}
+
+func TestGlobalFlagsReachTheMutations(t *testing.T) {
+	// A global flag the reads carry but the writes do not would mean the tool
+	// works until the moment it changes something.
+	spec, _ := ActionFor("D")
+	req := request("root", []int{42}, nil, nil)
+	req.Globals = []string{"--no-dbus"}
+	cmd, err := BuildCommand(spec, req)
+	if err != nil {
+		t.Fatalf("BuildCommand: %v", err)
+	}
+	want := []string{"snapper", "--no-dbus", "-c", "root", "delete", "42"}
+	if !reflect.DeepEqual(cmd.Argv, want) {
+		t.Errorf("Argv = %q, want %q", cmd.Argv, want)
 	}
 }
 
