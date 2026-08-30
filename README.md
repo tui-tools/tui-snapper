@@ -27,7 +27,7 @@ make demo     # the whole UI, on sample data, with no btrfs and no root
 ### Any distribution, static binary
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v{version}/tui-snapper_{version}_linux_amd64.tar.gz | tar -xz tui-snapper
+curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v0.1.0/tui-snapper_0.1.0_linux_amd64.tar.gz | tar -xz tui-snapper
 sudo install -m0755 tui-snapper /usr/local/bin/tui-snapper
 ```
 
