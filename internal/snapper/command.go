@@ -189,10 +189,19 @@ type Request struct {
 	Files []string
 	// Values holds the answers to the spec's fields.
 	Values map[FieldKind]string
+	// Current holds the values a form was seeded with, so a settings command
+	// writes only the keys the user actually changed. It is nil for every
+	// action that does not read the machine before asking.
+	Current map[FieldKind]string
 }
 
 // Value reads one collected field.
 func (r Request) Value(kind FieldKind) string { return strings.TrimSpace(r.Values[kind]) }
+
+// CurrentValue reads what a field was seeded with.
+func (r Request) CurrentValue(kind FieldKind) string {
+	return strings.TrimSpace(r.Current[kind])
+}
 
 // BuildCommand assembles the snapper invocation for an action. It is the only
 // place in the tool where a command line is built, and it is shared by the
@@ -220,6 +229,12 @@ func BuildCommand(spec ActionSpec, req Request) (runner.Command, error) {
 		return undoCommand(spec, req, argv)
 	case RollbackNow:
 		return rollbackCommand(spec, req, argv)
+	case CreateConfig:
+		return createConfigCommand(spec, req, argv)
+	case SetConfig:
+		return setConfigCommand(spec, req, argv)
+	case DeleteConfig:
+		return deleteConfigCommand(spec, req, argv)
 	default:
 		return runner.Command{}, fmt.Errorf("unknown action %q", spec.Action)
 	}
@@ -358,6 +373,97 @@ func rollbackCommand(spec ActionSpec, req Request, argv []string) (runner.Comman
 		Description: fmt.Sprintf("%s snapshot %d", spec.Label, numbers[0]),
 		Destructive: true,
 	}, nil
+}
+
+// createConfigCommand builds `snapper -c X create-config -f btrfs <subvolume>`.
+//
+// The filesystem type is passed explicitly rather than left to snapper's
+// default, so the preview says which backend will manage the config instead of
+// leaving the reader to know what snapper picks.
+func createConfigCommand(spec ActionSpec, req Request, argv []string) (runner.Command, error) {
+	if err := ValidateConfigName(req.Config); err != nil {
+		return runner.Command{}, err
+	}
+	subvolume := req.Value(FieldSubvolume)
+	if err := ValidateSubvolumePath(subvolume); err != nil {
+		return runner.Command{}, err
+	}
+	argv = append(argv, "create-config", "-f", BtrfsFSType, subvolume)
+	return runner.Command{
+		Argv: argv,
+		Description: fmt.Sprintf("%s %s for %s",
+			spec.Label, req.Config, subvolume),
+		Destructive: spec.Destructive,
+	}, nil
+}
+
+// setConfigCommand builds `snapper -c X set-config KEY=VALUE …`.
+//
+// Only the keys whose answer differs from what get-config reported are
+// written. A set-config that repeats every value would work, but the preview
+// is what the user reads before saying yes, and a preview naming eight keys
+// when one changed is a preview nobody reads.
+func setConfigCommand(spec ActionSpec, req Request, argv []string) (runner.Command, error) {
+	pairs := make([]string, 0, len(EditableSettings))
+	changed := make([]string, 0, len(EditableSettings))
+	for _, setting := range EditableSettings {
+		value := req.Value(setting.Kind)
+		if value == "" {
+			// A key the form did not collect is a key this command leaves
+			// alone, which is how a partially answered form stays harmless.
+			continue
+		}
+		if err := ValidateSettingValue(setting, value); err != nil {
+			return runner.Command{}, err
+		}
+		if value == req.CurrentValue(setting.Kind) {
+			continue
+		}
+		pairs = append(pairs, setting.Key+"="+value)
+		changed = append(changed, setting.Key)
+	}
+	if len(pairs) == 0 {
+		return runner.Command{}, fmt.Errorf("nothing changed, so there is nothing to write")
+	}
+	argv = append(argv, "set-config")
+	argv = append(argv, pairs...)
+	return runner.Command{
+		Argv: argv,
+		Description: fmt.Sprintf("%s of %s: %s",
+			spec.Label, req.Config, strings.Join(changed, ", ")),
+		Destructive: spec.Destructive,
+	}, nil
+}
+
+// deleteConfigCommand builds `snapper -c X delete-config`.
+//
+// The root config is refused outright: deleting it takes the whole history of
+// the root filesystem with it, including the entries a limine boot menu offers
+// for a rollback, and a snapshot browser is the wrong place to make that
+// possible however many dialogs stand in front of it.
+func deleteConfigCommand(spec ActionSpec, req Request, argv []string) (runner.Command, error) {
+	if err := ValidateConfigName(req.Config); err != nil {
+		return runner.Command{}, err
+	}
+	if req.Config == ProtectedConfig {
+		return runner.Command{}, fmt.Errorf(
+			"tui-snapper does not delete the %q config: it holds the root "+
+				"filesystem's whole history, and the boot menu's snapshot "+
+				"entries with it — use `snapper -c %s delete-config` deliberately, "+
+				"in a shell, if that is really what you want",
+			ProtectedConfig, ProtectedConfig)
+	}
+	argv = append(argv, "delete-config")
+	return runner.Command{
+		Argv:        argv,
+		Description: spec.Label + " " + req.Config,
+		Destructive: true,
+	}, nil
+}
+
+// GetConfigArgs is the read that returns one config's settings.
+func GetConfigArgs(globals []string, config string) []string {
+	return WithGlobals(globals, "-c", config, "get-config")
 }
 
 // WithGlobals starts an argv: the binary, then the snapper-wide flags, then

@@ -30,6 +30,11 @@ func (a *app) View() string {
 	switch a.mode {
 	case modeConfirm:
 		return a.confirm.View(a.theme, a.width, a.height)
+	case modeTypedConfirm:
+		if a.typed == nil {
+			return a.snapshotsView()
+		}
+		return a.typed.View(a.theme, a.width, a.height)
 	case modeInput, modeFilter:
 		return a.input.View(a.theme, a.width, a.height)
 	case modePick:
@@ -71,6 +76,12 @@ func (a *app) snapshotsView() string {
 	switch {
 	case a.loading && len(a.visible) == 0:
 		body = ui.EmptyState(a.theme, "reading the snapshots…", a.width, a.listHeight()+1)
+	case len(a.configs) == 0 && !a.loading:
+		// Nothing to list because snapper manages nothing yet, which the tool
+		// can fix: it names the keys instead of a command to run elsewhere.
+		body = ui.EmptyState(a.theme,
+			"snapper manages nothing on this machine — s, then n, creates a config",
+			a.width, a.listHeight()+1)
 	case len(a.visible) == 0 && a.loadFailed:
 		body = ui.EmptyState(a.theme,
 			"could not read the snapshots — see the message below",
@@ -321,37 +332,66 @@ func (a *app) snapshotStyle(s snapper.Snapshot) *lipgloss.Style {
 	return &style
 }
 
-// configsView renders the config picker.
+// configsView renders the config screen: which configs exist, and the keys
+// that create, change and delete one.
 func (a *app) configsView() string {
 	header := ui.Header{
 		Title:    "tui-snapper",
-		Subtitle: "configs  ·  enter selects, esc goes back",
+		Subtitle: "configs  ·  enter opens one, n creates one, a edits its limits",
 		Facts:    []ui.Fact{{Label: "configs", Value: strconv.Itoa(len(a.configs))}},
 	}.Render(a.theme, a.width)
 
-	rows := make([][]string, 0, len(a.configs))
-	for _, config := range a.configs {
-		marker := " "
-		if config.Name == a.config.Name {
-			marker = "▸"
+	var body string
+	if len(a.configs) == 0 {
+		body = ui.EmptyState(a.theme,
+			"snapper manages nothing yet — n creates the first config",
+			a.width, a.listHeight()+1)
+	} else {
+		rows := make([][]string, 0, len(a.configs))
+		for _, config := range a.configs {
+			marker := " "
+			if config.Name == a.config.Name {
+				marker = "▸"
+			}
+			rows = append(rows, []string{marker, config.Name, config.Subvolume})
 		}
-		rows = append(rows, []string{marker, config.Name, config.Subvolume})
+		body = ui.Table{
+			Columns: []ui.Column{
+				{Title: "", Width: 1},
+				{Title: "CONFIG", Width: 16},
+				{Title: "SUBVOLUME", Width: 24, Flex: true},
+			},
+			Rows: rows, Selected: a.configCursor, Height: a.listHeight(),
+		}.Render(a.theme, a.width)
 	}
-	body := ui.Table{
-		Columns: []ui.Column{
-			{Title: "", Width: 1},
-			{Title: "CONFIG", Width: 16},
-			{Title: "SUBVOLUME", Width: 24, Flex: true},
-		},
-		Rows: rows, Selected: a.configCursor, Height: a.listHeight(),
-	}.Render(a.theme, a.width)
 
-	hints := []ui.KeyHint{
-		{Key: "enter", Desc: "open"},
-		{Key: "esc", Desc: "back"},
-		{Key: "?", Desc: "help"},
+	hints := []ui.KeyHint{{Key: "enter", Desc: "open"}}
+	for _, spec := range snapper.ConfigActions {
+		hints = append(hints, ui.KeyHint{Key: spec.Key, Desc: configHintFor(spec)})
 	}
-	return a.screen(header, body, hints, "showing "+a.config.Name+"  ·  esc to go back")
+	hints = append(hints,
+		ui.KeyHint{Key: "esc", Desc: "back"}, ui.KeyHint{Key: "?", Desc: "help"})
+
+	status := "showing " + a.config.Name + "  ·  esc to go back"
+	if a.config.Name == "" {
+		status = "no config open  ·  n creates one"
+	}
+	return a.screen(header, body, hints, status)
+}
+
+// configHintFor is the short label a config action gets in the hint bar, where
+// the full sentence would not fit.
+func configHintFor(spec snapper.ActionSpec) string {
+	switch spec.Action {
+	case snapper.CreateConfig:
+		return "new config"
+	case snapper.SetConfig:
+		return "limits"
+	case snapper.DeleteConfig:
+		return "delete config"
+	default:
+		return strings.ToLower(spec.Label)
+	}
 }
 
 // diffView renders what changed between two snapshots.
@@ -758,6 +798,17 @@ func actionHints() []ui.KeyHint {
 	return hints
 }
 
+// configActionHints renders the config screen's action table, for the same
+// reason actionHints renders the snapshot one.
+func configActionHints() []ui.KeyHint {
+	hints := make([]ui.KeyHint, 0, len(snapper.ConfigActions))
+	for _, spec := range snapper.ConfigActions {
+		hints = append(hints, ui.KeyHint{
+			Key: spec.Key, Desc: strings.ToLower(spec.Label)})
+	}
+	return hints
+}
+
 // helpKeys is the full key list shown on the help screen. It is kept short
 // enough to fit a 24-row terminal, because a help screen that scrolls off the
 // top is worse than no help at all.
@@ -770,6 +821,10 @@ func helpKeys() []ui.KeyHint {
 		{Key: "", Desc: ""},
 	}
 	hints = append(hints, actionHints()...)
+	hints = append(hints,
+		ui.KeyHint{Key: "", Desc: ""},
+		ui.KeyHint{Key: "on s", Desc: "the config screen, where these three act on the config:"})
+	hints = append(hints, configActionHints()...)
 	return append(hints,
 		ui.KeyHint{Key: "", Desc: ""},
 		ui.KeyHint{Key: "d / enter", Desc: "compare two snapshots; a post pairs with its pre"},

@@ -34,6 +34,23 @@ regexes = [
   # the placeholder every manual page reaches for. Invented, not captured.
   '''^(ana|alice|bob|johndoe)$''',
 ]
+# One commit, by its full sha, and nothing else.
+#
+# 82e8b6c4 added a table-test case whose key was a real path from the machine
+# it was written on, `/home/<maintainer>/projects`. It is a made-up path in a
+# unit test rather than a capture of anything, but it is exactly what this rule
+# exists to catch, and the rule was right to catch it. The next commit rewrote
+# it to /home/user/projects, so no file in this repository carries it any more
+# — the finding survives only because the commit that introduced it is still in
+# the branch's history, and rewriting a pushed branch to hide it would be a
+# worse trade than naming it here.
+#
+# This exempts that one commit. It does not add a name to the list above, it
+# does not exempt the file, and any new occurrence in any other commit is still
+# a finding. Do not extend this list to silence a live one.
+commits = [
+  "82e8b6c42b7d35e6590a19529fce7b827ea0efc4",
+]
 
 # Build output. CI scans a fresh checkout, where none of this exists, but a
 # developer running the same command locally would otherwise be shown their
