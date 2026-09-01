@@ -24,6 +24,8 @@ type Fake struct {
 	mu        sync.Mutex
 	configs   []Config
 	snapshots map[string][]Snapshot
+	// settings is what get-config reports for each config.
+	settings map[string]map[string]string
 	// next is the number the next created snapshot gets.
 	next int
 	run  *runner.Fake
@@ -44,6 +46,10 @@ func NewFake() *Fake {
 		snapshots: map[string][]Snapshot{
 			"root": demoRootSnapshots(),
 			"home": demoHomeSnapshots(),
+		},
+		settings: map[string]map[string]string{
+			"root": demoSettings("10", "yes"),
+			"home": demoSettings("50", "no"),
 		},
 		next: 48,
 	}
@@ -78,6 +84,41 @@ func (f *Fake) Configs(_ context.Context) ([]Config, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]Config(nil), f.configs...), nil
+}
+
+// Settings reports one sample config's settings, the way get-config would.
+func (f *Fake) Settings(_ context.Context, config string) (map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	settings, ok := f.settings[config]
+	if !ok {
+		//nolint:staticcheck // mirrors snapper's exact message
+		return nil, fmt.Errorf("Config '%s' not found.", config)
+	}
+	out := map[string]string{}
+	for key, value := range settings {
+		out[key] = value
+	}
+	return out, nil
+}
+
+// CheckSubvolume answers the same question the real backend answers from the
+// mount table, against the sample filesystem below. It refuses the same paths
+// for the same reasons, so the demo shows the real refusals.
+func (f *Fake) CheckSubvolume(_ context.Context, path string) error {
+	if err := ValidateSubvolumePath(path); err != nil {
+		return err
+	}
+	fstype, found := FilesystemOf(path, demoMounts())
+	if !found {
+		return fmt.Errorf("no mounted filesystem holds %s", path)
+	}
+	if fstype != BtrfsFSType {
+		return fmt.Errorf(
+			"%s is on a %s filesystem, and snapper's snapshots need %s",
+			path, fstype, BtrfsFSType)
+	}
+	return nil
 }
 
 // Snapshots lists one sample config's snapshots.
@@ -173,6 +214,11 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// create-config is the one command whose config does not exist yet, so it
+	// is applied before the "does this config exist" check below.
+	if len(rest) > 0 && rest[0] == "create-config" {
+		return f.applyCreateConfig(config, rest[1:])
+	}
 	if _, ok := f.snapshots[config]; !ok {
 		//nolint:staticcheck // mirrors snapper's exact message
 		return "", fmt.Errorf("Config '%s' not found.", config)
@@ -190,6 +236,10 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 		return f.applyModify(config, rest[1:])
 	case "cleanup":
 		return f.applyCleanup(config, rest[1:])
+	case "set-config":
+		return f.applySetConfig(config, rest[1:])
+	case "delete-config":
+		return f.applyDeleteConfig(config)
 	case "undochange":
 		return "create:0 modify:1 delete:0", nil
 	case "rollback":
@@ -224,6 +274,59 @@ func (f *Fake) applyCreate(config string, args []string) (string, error) {
 	}
 	f.next++
 	f.snapshots[config] = append(f.snapshots[config], snapshot)
+	return "", nil
+}
+
+// applyCreateConfig registers a new config, the way `snapper create-config`
+// would: the config exists afterwards and holds no snapshots yet.
+func (f *Fake) applyCreateConfig(config string, args []string) (string, error) {
+	if _, taken := f.settings[config]; taken {
+		//nolint:staticcheck // mirrors snapper's exact message
+		return "", fmt.Errorf("Config '%s' already exists.", config)
+	}
+	subvolume := ""
+	if len(args) > 0 {
+		subvolume = args[len(args)-1]
+	}
+	if subvolume == "" {
+		return "", fmt.Errorf("create-config needs a subvolume")
+	}
+	f.configs = append(f.configs, Config{Name: config, Subvolume: subvolume})
+	f.snapshots[config] = []Snapshot{{
+		Number: 0, Type: TypeSingle, Description: "current", User: "root",
+		UsedSpace: UsedSpaceUnknown, Subvolume: subvolume,
+	}}
+	f.settings[config] = demoSettings("50", "yes")
+	return "", nil
+}
+
+// applySetConfig writes the KEY=VALUE pairs into the sample settings.
+func (f *Fake) applySetConfig(config string, args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("set-config needs at least one KEY=VALUE")
+	}
+	for _, arg := range args {
+		key, value, ok := strings.Cut(arg, "=")
+		if !ok || key == "" {
+			//nolint:staticcheck // mirrors snapper's exact message
+			return "", fmt.Errorf("Invalid configdata '%s'.", arg)
+		}
+		f.settings[config][key] = value
+	}
+	return "", nil
+}
+
+// applyDeleteConfig makes the sample state forget a config entirely.
+func (f *Fake) applyDeleteConfig(config string) (string, error) {
+	kept := make([]Config, 0, len(f.configs))
+	for _, c := range f.configs {
+		if c.Name != config {
+			kept = append(kept, c)
+		}
+	}
+	f.configs = kept
+	delete(f.snapshots, config)
+	delete(f.settings, config)
 	return "", nil
 }
 
@@ -416,6 +519,47 @@ func demoHomeSnapshots() []Snapshot {
 		}
 	}
 	return rows
+}
+
+// demoSettings is the settings table `snapper get-config` reports for a sample
+// config. The two arguments are the values that differ between the demo
+// configs, so switching config on the settings form shows different numbers.
+func demoSettings(numberLimit, timelineCreate string) map[string]string {
+	return map[string]string{
+		"ALLOW_GROUPS":           "wheel",
+		"ALLOW_USERS":            "",
+		"BACKGROUND_COMPARISON":  "yes",
+		"EMPTY_PRE_POST_CLEANUP": "yes",
+		"FSTYPE":                 BtrfsFSType,
+		"NUMBER_CLEANUP":         "yes",
+		"NUMBER_LIMIT":           numberLimit,
+		"NUMBER_LIMIT_IMPORTANT": "10",
+		"NUMBER_MIN_AGE":         "1800",
+		"SUBVOLUME":              "/",
+		"SYNC_ACL":               "no",
+		"TIMELINE_CLEANUP":       "yes",
+		"TIMELINE_CREATE":        timelineCreate,
+		"TIMELINE_LIMIT_DAILY":   "7",
+		"TIMELINE_LIMIT_HOURLY":  "10",
+		"TIMELINE_LIMIT_MONTHLY": "6",
+		"TIMELINE_LIMIT_WEEKLY":  "4",
+		"TIMELINE_LIMIT_YEARLY":  "2",
+	}
+}
+
+// demoMounts is the sample mount table CheckSubvolume answers from: two btrfs
+// subvolumes that already have a config, two that do not, and two paths on
+// another filesystem, so the demo can show both a config being created and the
+// refusal a wrong path gets.
+func demoMounts() []Mount {
+	return []Mount{
+		{Point: "/", FSType: BtrfsFSType},
+		{Point: "/home", FSType: BtrfsFSType},
+		{Point: "/srv", FSType: BtrfsFSType},
+		{Point: "/var/log", FSType: BtrfsFSType},
+		{Point: "/boot", FSType: "vfat"},
+		{Point: "/tmp", FSType: "tmpfs"},
+	}
 }
 
 // demoChanges is the sample comparison the diff view shows: a package upgrade

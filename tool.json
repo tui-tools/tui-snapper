@@ -3,7 +3,7 @@
   "name": "tui-snapper",
   "binary": "tui-snapper",
   "tagline": "btrfs snapshots, managed by snapper, from the terminal",
-  "description": "A terminal UI for the btrfs snapshots `snapper` manages. It lists every config and its history — pre/post pairs from package upgrades next to the hourly timeline snapshots — compares any two of them, and shows what changed file by file, with a read-only diff for anything you want to look at closely.\n\nIt creates, deletes, relabels and cleans up snapshots too, and puts individual files back with `undochange` without touching the rest of the filesystem. Every one of those is shown as the exact `snapper` command line and confirmed before it runs; starting the tool only reads.\n\nRollback is the one thing that genuinely differs between machines, so it is detected rather than assumed: where `snapper rollback` is the mechanism it is offered with a full warning, and on an Omarchy or limine-snapper-sync layout the boot menu entries are read from `/boot/limine.conf` and shown read-only, because that is where the rollback really happens.\n\n`--demo` runs the whole UI against a sample history, so you can try it without a btrfs filesystem to risk.",
+  "description": "A terminal UI for the btrfs snapshots `snapper` manages. It lists every config and its history — pre/post pairs from package upgrades next to the hourly timeline snapshots — compares any two of them, and shows what changed file by file, with a read-only diff for anything you want to look at closely.\n\nIt creates, deletes, relabels and cleans up snapshots too, and puts individual files back with `undochange` without touching the rest of the filesystem. The configs themselves are authored from the same screen: create one for a subvolume, edit its retention limits, delete it. Every one of those is shown as the exact `snapper` command line and confirmed before it runs; starting the tool only reads.\n\nRollback is the one thing that genuinely differs between machines, so it is detected rather than assumed: where `snapper rollback` is the mechanism it is offered with a full warning, and on an Omarchy or limine-snapper-sync layout the boot menu entries are read from `/boot/limine.conf` and shown read-only, because that is where the rollback really happens.\n\n`--demo` runs the whole UI against a sample history, so you can try it without a btrfs filesystem to risk.",
   "category": "snapshots",
   "homepage": "https://github.com/tui-tools/tui-snapper",
   "repo": "https://github.com/tui-tools/tui-snapper",
@@ -74,8 +74,16 @@
       "action": "Rollback, or how this machine actually rolls back"
     },
     {
-      "key": "s / T",
-      "action": "Switch config / snapper's timers, read-only"
+      "key": "s",
+      "action": "The config screen: switch config, and author one"
+    },
+    {
+      "key": "n / a / D",
+      "action": "On the config screen: create a config, edit its limits, delete it"
+    },
+    {
+      "key": "T",
+      "action": "snapper's systemd timers, read-only"
     },
     {
       "key": "/",
@@ -181,7 +189,7 @@
     }
   },
   "security": {
-    "needs_sudo": "Reads too, not only writes: snapper opens its subvolumes directly, so even listing snapshots needs root. Run with sudo, or leave sudo = \"sudo -n\" configured. create, delete, modify, cleanup, undochange and rollback change things, and each is confirmed first. --demo escalates nothing.",
+    "needs_sudo": "Reads too, not only writes: snapper opens its subvolumes directly, so even listing snapshots needs root. Run with sudo, or leave sudo = \"sudo -n\" configured. Everything that changes something — snapshots, and the configs themselves — is confirmed first. --demo escalates nothing.",
     "preview_before_run": true,
     "no_daemon": true,
     "no_network": true,

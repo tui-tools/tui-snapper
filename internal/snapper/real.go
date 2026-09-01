@@ -33,6 +33,9 @@ type Real struct {
 	// bootConfig is the limine configuration the boot entries are read
 	// from. It is a field so a test can point it at a fixture.
 	bootConfig string
+	// mountInfo is the kernel's mount table, read when a new config's
+	// subvolume is checked. It is a field for the same reason.
+	mountInfo string
 	// globals are the snapper-wide flags every invocation carries. They are
 	// part of the argv the dialog previews, so what runs is still exactly
 	// what was shown.
@@ -75,7 +78,7 @@ func New(sudoPrefix []string) (*Real, error) {
 		return nil, err
 	}
 
-	r := &Real{snapper: sn, bootConfig: DefaultBootConfig}
+	r := &Real{snapper: sn, bootConfig: DefaultBootConfig, mountInfo: MountInfoPath}
 	r.systemctl, r.systemctlErr = runner.New(runner.Options{
 		Bin:             "systemctl",
 		SearchPaths:     []string{"/usr/bin/systemctl", "/bin/systemctl"},
@@ -135,6 +138,34 @@ func (r *Real) Configs(ctx context.Context) ([]Config, error) {
 		return nil, err
 	}
 	return ParseConfigs(out)
+}
+
+// Settings reads one config's settings.
+func (r *Real) Settings(ctx context.Context, config string) (map[string]string, error) {
+	if config == "" {
+		return nil, fmt.Errorf("no config selected")
+	}
+	out, err := r.read(ctx, GetConfigArgs(r.globals, config)...)
+	if err != nil {
+		return nil, err
+	}
+	settings := ParseConfigSettings(out)
+	if len(settings) == 0 {
+		return nil, fmt.Errorf("snapper printed no settings for config %q", config)
+	}
+	return settings, nil
+}
+
+// CheckSubvolume reports whether a path can hold a new snapper config. It is a
+// plain filesystem question — does this directory exist, and is it on btrfs —
+// so it is answered by reading the kernel's mount table rather than by running
+// anything.
+func (r *Real) CheckSubvolume(_ context.Context, path string) error {
+	mounts, err := ReadMounts(r.mountInfo)
+	if err != nil {
+		return err
+	}
+	return CheckSubvolume(path, mounts)
 }
 
 // Snapshots lists one config's snapshots, newest first.

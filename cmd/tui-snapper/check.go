@@ -41,6 +41,12 @@ type checkReport struct {
 	// person counts in `snapper list`.
 	Snapshots int `json:"snapshots"`
 	Real      int `json:"real_snapshots"`
+	// Settings is what `snapper get-config` reports for the retention keys
+	// this tool can write, and SettingsErr why it could not be read. Only
+	// those keys: a config also carries the users and groups allowed to use
+	// it, and a --check output gets pasted into public issues.
+	Settings    map[string]string `json:"settings"`
+	SettingsErr string            `json:"settings_error,omitempty"`
 	// Rollback is how this machine rolls back, which is the one thing that
 	// genuinely differs between an openSUSE-style layout and an Omarchy one.
 	Rollback   string `json:"rollback"`
@@ -105,6 +111,11 @@ func runCheck(backend snapper.Backend, wanted string,
 	}
 	platform := backend.Platform(ctx, config)
 
+	// The settings read is reported rather than fatal: a machine whose
+	// get-config this build cannot read still has a working snapshot view,
+	// and the reason belongs in the report instead of in an exit code.
+	settings, settingsErr := readEditableSettings(ctx, backend, config.Name)
+
 	report := checkReport{
 		Tool:         toolName,
 		Version:      version,
@@ -115,6 +126,8 @@ func runCheck(backend snapper.Backend, wanted string,
 		Configs:      len(configs),
 		ConfigList:   configs,
 		Snapshots:    len(snapshots),
+		Settings:     settings,
+		SettingsErr:  settingsErr,
 		Rollback:     string(platform.Kind),
 		Reason:       platform.Reason,
 		BootConfig:   platform.BootConfig,
@@ -133,4 +146,21 @@ func runCheck(backend snapper.Backend, wanted string,
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(report)
+}
+
+// readEditableSettings reads a config's settings and keeps only the keys the
+// tool can write, so the report says what the retention form would open on.
+func readEditableSettings(ctx context.Context, backend snapper.Backend,
+	config string) (map[string]string, string) {
+	settings, err := backend.Settings(ctx, config)
+	if err != nil {
+		return nil, err.Error()
+	}
+	kept := map[string]string{}
+	for _, setting := range snapper.EditableSettings {
+		if value, ok := settings[setting.Key]; ok {
+			kept[setting.Key] = value
+		}
+	}
+	return kept, ""
 }

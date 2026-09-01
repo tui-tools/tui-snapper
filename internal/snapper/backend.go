@@ -17,6 +17,11 @@ type Backend interface {
 
 	// Configs lists the snapper configurations on this machine.
 	Configs(ctx context.Context) ([]Config, error)
+	// Settings reads one config's settings, keyed by snapper's own key names.
+	Settings(ctx context.Context, config string) (map[string]string, error)
+	// CheckSubvolume reports whether a path can hold a new snapper config.
+	// The error explains what is wrong with it, for the dialog.
+	CheckSubvolume(ctx context.Context, path string) error
 	// Snapshots lists one config's snapshots, newest first.
 	Snapshots(ctx context.Context, config string) ([]Snapshot, error)
 	// Status lists what changed between two snapshots.

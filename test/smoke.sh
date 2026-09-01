@@ -247,6 +247,26 @@ else
     "\"rollback_reason\": \".*root filesystem"
 fi
 
+# 7b. The config's own settings, which is what the retention form on the
+#     config screen opens on. The form seeds itself from this read, so a
+#     mismatch here means it would offer the user the wrong current value —
+#     and the assertion is against snapper's own get-config, not a constant.
+number_limit=$(sudo -n snapper -c "$config" get-config \
+  | awk -F'|' '$1 ~ /^NUMBER_LIMIT[ \t]*$/ {gsub(/ /, "", $2); print $2}')
+if [[ -n "$number_limit" ]]; then
+  report_says "NUMBER_LIMIT matches \`snapper get-config\` ($number_limit)" \
+    "\"NUMBER_LIMIT\": \"$number_limit\""
+else
+  echo "      snapper get-config printed no NUMBER_LIMIT, so it is not asserted"
+fi
+report_says "the timeline keys are read too" '"TIMELINE_LIMIT_HOURLY": "'
+
+# 7c. Only the retention keys are reported. A config also names the users and
+#     groups allowed to use it, and a --check output gets pasted into issues.
+check "the settings block carries no user or group key" \
+  "printf '%s' \"\$report\" | sed -n '/\"settings\": {/,/^  }/p' | grep -c 'ALLOW_' || true" \
+  '^0$'
+
 # 8. The systemd timers are reported, read-only. Both units are always listed,
 #    even on a machine where they are not installed, so the screen can say so.
 report_says "both snapper timers are reported" '"Unit": "snapper-timeline.timer"'

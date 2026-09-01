@@ -140,6 +140,79 @@ func FuzzParseStatus(f *testing.F) {
 	})
 }
 
+// FuzzParseConfigSettings guards the read that seeds the retention form. A
+// value it returns is offered back to the user as the current setting and, if
+// left alone, is what set-config compares against, so a value carrying a
+// newline or a key carrying a space would build a command nobody could read.
+func FuzzParseConfigSettings(f *testing.F) {
+	seed(f, "get-config.txt")
+	f.Add("Key | Value\nNUMBER_LIMIT | 50\n")
+	f.Add("NUMBER_LIMIT|50|60")
+	f.Add("|")
+	f.Fuzz(func(t *testing.T, out string) {
+		for key, value := range ParseConfigSettings(out) {
+			if key == "" {
+				t.Fatal("a setting with no key")
+			}
+			oneLine(t, "setting key", key)
+			oneLine(t, "setting value", value)
+			if strings.TrimSpace(key) != key || strings.TrimSpace(value) != value {
+				t.Fatalf("setting %q=%q kept its padding", key, value)
+			}
+			if !strings.Contains(out, key) {
+				t.Fatalf("setting key %q is not in the input", key)
+			}
+			// Whatever came back, only a value the validator accepts may ever
+			// reach a command line.
+			if setting, ok := settingByKey(key); ok && value != "" {
+				if err := ValidateSettingValue(setting, value); err != nil {
+					continue
+				}
+				if strings.ContainsAny(value, " \t\n") {
+					t.Fatalf("%s accepted a value with whitespace: %q", key, value)
+				}
+			}
+		}
+	})
+}
+
+// settingByKey finds an editable setting by its snapper key.
+func settingByKey(key string) (Setting, bool) {
+	for _, setting := range EditableSettings {
+		if setting.Key == key {
+			return setting, true
+		}
+	}
+	return Setting{}, false
+}
+
+// FuzzParseMountInfo guards the read that decides whether a path can hold a
+// config. A mount point it invents would let a create-config through for a
+// filesystem snapper cannot snapshot.
+func FuzzParseMountInfo(f *testing.F) {
+	f.Add("30 1 0:29 /@ / rw,relatime shared:1 - btrfs /dev/nvme0n1p2 rw,subvol=/@\n")
+	f.Add("21 30 0:19 / /proc rw - proc proc rw")
+	f.Add("1 2 3 4 5 - ")
+	// The regression FuzzParseMountInfo found: the kernel escapes a newline in
+	// a mount point, and unescaping it used to put a control character into a
+	// row the screen draws a line at a time.
+	f.Add(`1 2 3 4 \012 - btrfs /dev/sda1 rw`)
+	f.Add(" - ")
+	f.Add("")
+	f.Fuzz(func(t *testing.T, out string) {
+		for _, mount := range ParseMountInfo(out) {
+			if mount.Point == "" || mount.FSType == "" {
+				t.Fatalf("half a mount: %+v", mount)
+			}
+			oneLine(t, "mount point", mount.Point)
+			oneLine(t, "filesystem type", mount.FSType)
+			if !strings.Contains(out, mount.FSType) {
+				t.Fatalf("filesystem type %q is not in the input", mount.FSType)
+			}
+		}
+	})
+}
+
 func FuzzParseTimerState(f *testing.F) {
 	f.Add("ActiveState=active\nUnitFileState=enabled\n")
 	f.Add("ActiveState=inactive\nUnitFileState=disabled")

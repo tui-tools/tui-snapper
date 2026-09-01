@@ -27,6 +27,7 @@ const (
 	modeRollback
 	modeTimers
 	modeConfirm
+	modeTypedConfirm
 	modeInput
 	modePick
 	modeFilter
@@ -98,11 +99,18 @@ type app struct {
 	mode     mode
 	prevMode mode
 	confirm  ui.Confirm
-	input    ui.Input
-	picker   ui.Picker
-	pending  *pending
+	// typed is the confirm dialog that asks for a word rather than for a key.
+	// Deleting a config is the one action heavy enough to need it.
+	typed   *typedConfirm
+	input   ui.Input
+	picker  ui.Picker
+	pending *pending
 	// field is the field the open input or picker is collecting.
 	field snapper.Field
+	// deleteCount is how many snapshots the config about to be deleted holds,
+	// and deleteCountKnown whether that read succeeded.
+	deleteCount      int
+	deleteCountKnown bool
 
 	status     string
 	statusKind ui.StatusKind
@@ -128,6 +136,28 @@ type snapshotsMsg struct {
 	config    string
 	snapshots []snapper.Snapshot
 	err       error
+}
+
+// settingsMsg carries one config's settings, read before the form that edits
+// them opens.
+type settingsMsg struct {
+	config   string
+	settings map[string]string
+	err      error
+}
+
+// subvolumeMsg carries the verdict on a path typed into the new-config form.
+type subvolumeMsg struct {
+	path string
+	err  error
+}
+
+// configCountMsg carries how many snapshots a config holds, read before its
+// deletion is confirmed so the dialog can say what goes with it.
+type configCountMsg struct {
+	config string
+	count  int
+	err    error
 }
 
 // statusMsg carries the result of a comparison read.
@@ -203,6 +233,47 @@ func (a *app) loadSnapshots() tea.Cmd {
 		defer cancel()
 		snapshots, err := backend.Snapshots(ctx, name)
 		return snapshotsMsg{config: name, snapshots: snapshots, err: err}
+	}
+}
+
+// loadSettings reads one config's settings, which is what seeds the retention
+// form: editing starts from what the machine says, not from a blank page.
+func (a *app) loadSettings(config string) tea.Cmd {
+	backend := a.backend
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+		defer cancel()
+		settings, err := backend.Settings(ctx, config)
+		return settingsMsg{config: config, settings: settings, err: err}
+	}
+}
+
+// checkSubvolume asks the backend whether a path can hold a new config, before
+// the command that would fail on it is ever previewed.
+func (a *app) checkSubvolume(path string) tea.Cmd {
+	backend := a.backend
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+		defer cancel()
+		return subvolumeMsg{path: path, err: backend.CheckSubvolume(ctx, path)}
+	}
+}
+
+// loadConfigCount reads how many snapshots a config holds, so the deletion
+// dialog can name what is about to go with it.
+func (a *app) loadConfigCount(config string) tea.Cmd {
+	backend := a.backend
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+		defer cancel()
+		snapshots, err := backend.Snapshots(ctx, config)
+		count := 0
+		for _, s := range snapshots {
+			if !s.Current() {
+				count++
+			}
+		}
+		return configCountMsg{config: config, count: count, err: err}
 	}
 }
 
@@ -302,6 +373,15 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.settleCursor()
 		return a, nil
 
+	case settingsMsg:
+		return a.onSettings(msg)
+
+	case subvolumeMsg:
+		return a.onSubvolume(msg)
+
+	case configCountMsg:
+		return a.onConfigCount(msg)
+
 	case statusMsg:
 		a.loading = false
 		if msg.from != a.diffFrom || msg.to != a.diffTo {
@@ -366,10 +446,15 @@ func (a *app) onConfigs(msg configsMsg) (tea.Model, tea.Cmd) {
 	}
 	a.configs = msg.configs
 	if len(a.configs) == 0 {
+		// Not a failure: a machine snapper has never been set up on. The tool
+		// can set it up, so it says which keys do that rather than handing the
+		// user a command line to go and run somewhere else.
 		a.loading = false
-		a.loadFailed = true
+		a.loadFailed = false
+		a.config = snapper.Config{}
+		a.snapshots, a.visible = nil, nil
 		a.setStatus(ui.StatusWarn,
-			"snapper has no configs on this machine — `snapper create-config <subvolume>` makes one")
+			"snapper has no configs on this machine — press s for the config screen, then n to create one")
 		return a, nil
 	}
 	if picked, ok := a.pickConfig(a.config.Name); ok {
@@ -411,6 +496,17 @@ func (a *app) onRan(msg ranMsg) (tea.Model, tea.Cmd) {
 	}
 	a.setStatusf(ui.StatusOK, "%s: %s", msg.cmd.Description, runner.FirstLine(summary))
 	a.loading = true
+	// A config command changes the list of configs rather than the snapshots
+	// of one, so it is the config list that has to be read again.
+	if kind, config := configSubcommand(msg.cmd.Argv); kind != "" {
+		if kind == "delete-config" && config == a.config.Name {
+			// The config being shown has just gone: nothing on screen belongs
+			// to it any more, and the reload picks whatever is left.
+			a.config = snapper.Config{}
+			a.resetForConfig()
+		}
+		return a, a.loadConfigs()
+	}
 	// A change to a snapshot can change what a comparison shows, so the open
 	// diff view is re-read alongside the list.
 	if a.mode == modeDiff && a.diffFrom != a.diffTo {
@@ -433,6 +529,8 @@ func (a *app) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch a.mode {
 	case modeConfirm:
 		return a.handleConfirm(msg)
+	case modeTypedConfirm:
+		return a.handleTypedConfirm(msg)
 	case modeInput:
 		return a.handleFieldInput(msg)
 	case modePick:
@@ -492,8 +590,7 @@ func (a *app) handleFieldInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.setStatusf(ui.StatusWarn, "%s cannot be empty", strings.ToLower(a.field.Title))
 		return a, a.cancelPending()
 	}
-	a.collect(a.field.Kind, value)
-	return a, a.advance()
+	return a, a.collected(value)
 }
 
 // handlePicker collects a fixed-choice field of a pending action.
@@ -505,8 +602,55 @@ func (a *app) handlePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if !a.picker.Accepted {
 		return a, a.cancelPending()
 	}
-	a.collect(a.field.Kind, a.picker.Selected())
-	return a, a.advance()
+	return a, a.collected(a.picker.Selected())
+}
+
+// collected records one answer and decides what happens next: an answer that
+// is wrong on its face sends the same prompt back rather than failing after
+// the user has answered the rest, and a subvolume path is checked against the
+// machine before the form goes on.
+func (a *app) collected(value string) tea.Cmd {
+	kind := a.field.Kind
+	a.collect(kind, value)
+	if err := validateAnswer(a.field, value); err != nil {
+		a.setStatus(ui.StatusWarn, err.Error())
+		return a.reask()
+	}
+	if kind == snapper.FieldSubvolume {
+		a.mode = a.returnMode()
+		a.busy = true
+		return a.checkSubvolume(value)
+	}
+	return a.advance()
+}
+
+// validateAnswer checks one answer without touching the machine. An optional
+// field left empty is an answer too: for a settings key it means "leave this
+// one alone".
+func validateAnswer(field snapper.Field, value string) error {
+	if value == "" && field.Optional {
+		return nil
+	}
+	switch field.Kind {
+	case snapper.FieldConfigName:
+		return snapper.ValidateConfigName(value)
+	case snapper.FieldSubvolume:
+		return snapper.ValidateSubvolumePath(value)
+	}
+	if setting, ok := snapper.SettingFor(field.Kind); ok {
+		return snapper.ValidateSettingValue(setting, value)
+	}
+	return nil
+}
+
+// reask puts the field that was just answered back at the head of the queue,
+// so a rejected answer is corrected instead of losing the whole form.
+func (a *app) reask() tea.Cmd {
+	if a.pending == nil {
+		return nil
+	}
+	a.pending.fields = append([]snapper.Field{a.field}, a.pending.fields...)
+	return a.advance()
 }
 
 // handleFilter resolves the filter prompt of whichever list is open.
@@ -588,37 +732,6 @@ func (a *app) handleSnapshotsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.mode = modeTimers
 		a.loading = true
 		return a, a.loadTimers()
-	}
-	return a, nil
-}
-
-// handleConfigsKey handles the config picker.
-func (a *app) handleConfigsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q", "s":
-		a.mode = modeSnapshots
-		return a, nil
-	case "?":
-		a.prevMode = modeConfigs
-		a.mode = modeHelp
-		return a, nil
-	case "down", "j", "ctrl+n":
-		a.configCursor = min(a.configCursor+1, max(len(a.configs)-1, 0))
-	case "up", "k", "ctrl+p":
-		a.configCursor = max(a.configCursor-1, 0)
-	case "g", "home":
-		a.configCursor = 0
-	case "G", "end":
-		a.configCursor = max(len(a.configs)-1, 0)
-	case "enter":
-		if a.configCursor < 0 || a.configCursor >= len(a.configs) {
-			return a, nil
-		}
-		a.config = a.configs[a.configCursor]
-		a.mode = modeSnapshots
-		a.resetForConfig()
-		a.loading = true
-		return a, tea.Batch(a.loadSnapshots(), a.loadPlatform())
 	}
 	return a, nil
 }
@@ -862,6 +975,11 @@ func (a *app) advance() tea.Cmd {
 	a.field = a.pending.fields[0]
 	a.pending.fields = a.pending.fields[1:]
 	current := a.pending.req.Values[a.field.Kind]
+	if current == "" && a.field.Kind == snapper.FieldConfigName {
+		// The name a config usually gets for the subvolume just typed, so the
+		// second prompt is a confirmation rather than an invention.
+		current = snapper.SuggestConfigName(a.pending.req.Value(snapper.FieldSubvolume))
+	}
 
 	if len(a.field.Options) == 0 {
 		a.input = ui.NewInput(a.field.Title, "…", current)
@@ -893,6 +1011,11 @@ func (a *app) collect(kind snapper.FieldKind, value string) {
 		return
 	}
 	a.pending.req.Values[kind] = value
+	if kind == snapper.FieldConfigName {
+		// The name is what every later -c carries, so it is the request's
+		// config rather than only one more answer.
+		a.pending.req.Config = value
+	}
 }
 
 // previewPending builds the command and opens the confirm dialog.
@@ -904,6 +1027,20 @@ func (a *app) previewPending() tea.Cmd {
 		a.pending = nil
 		a.setStatus(ui.StatusError, err.Error())
 		return nil
+	}
+	// Deleting a config drops a whole history at once, which is more than a
+	// single keystroke should be able to do: that one asks for the config's
+	// name to be typed out.
+	if p.spec.Action == snapper.DeleteConfig {
+		a.mode = modeTypedConfirm
+		a.typed = newTypedConfirm(typedConfirmSpec{
+			title:   cmd.Description,
+			body:    a.deleteConfigBody(p),
+			command: a.backend.Preview(cmd),
+			word:    p.req.Config,
+			cmd:     cmd,
+		})
+		return a.typed.input.Model.Focus()
 	}
 	a.mode = modeConfirm
 	a.confirm = ui.Confirm{
@@ -979,12 +1116,10 @@ func (a *app) openFilter(title, placeholder, value string, target mode) {
 	a.mode = modeFilter
 }
 
-// openConfigs shows the config picker.
+// openConfigs shows the config screen. It opens on an empty list too: a
+// machine with no configs at all is exactly the machine that needs the key
+// that creates one.
 func (a *app) openConfigs() tea.Cmd {
-	if len(a.configs) == 0 {
-		a.setStatus(ui.StatusWarn, "no configs to choose from")
-		return nil
-	}
 	a.configCursor = 0
 	for i, config := range a.configs {
 		if config.Name == a.config.Name {

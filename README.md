@@ -206,6 +206,24 @@ exact `snapper` command line first.
 
 ![The confirm dialog](docs/screenshots/tui-snapper-delete.png)
 
+**The configs themselves.** `s` opens the config screen, and it is no longer
+only a picker. `n` creates a config for a subvolume: type the path, the tool
+checks that it exists and is on a mounted btrfs filesystem before going on,
+suggests the name that path usually gets, and previews
+`snapper -c <name> create-config -f btrfs <subvolume>`. `a` on a config edits
+its retention limits — `NUMBER_LIMIT`, `NUMBER_LIMIT_IMPORTANT`,
+`TIMELINE_CREATE`, the five `TIMELINE_LIMIT_*` keys and
+`EMPTY_PRE_POST_CLEANUP` — seeded from `snapper get-config`, so the form opens
+on what the machine actually says. Only the keys you changed are written, and
+no key outside that list is ever touched. `D` deletes a config, and asks for
+the config's name to be typed out first; the `root` config is refused
+outright, because its history is also what a limine boot menu offers for a
+rollback.
+
+A machine where snapper manages nothing at all opens on that screen too — the
+one case where "there is nothing to show" and "there is something to do about
+it" are the same screen.
+
 **Rollback, honestly.** This is the one thing that genuinely differs between
 machines, so the tool works out which mechanism is in front of you instead of
 assuming:
@@ -255,10 +273,19 @@ empty list. `--demo` needs neither.
 | `e` / `a` | change the description / the cleanup algorithm |
 | `C` | run a cleanup: `number`, `timeline` or `empty-pre-post` |
 | `R` | rollback, or how this machine actually rolls back |
-| `s` / `T` | switch config / snapper's timers, read-only |
+| `s` / `T` | the config screen / snapper's timers, read-only |
 | `/` | filter the list |
 | `r` | re-read the current view |
 | `?` / `q` | help / quit |
+
+On the config screen (`s`), three keys act on the configuration itself:
+
+| Key | What it does |
+| --- | --- |
+| `enter` | open that config's snapshots |
+| `n` | create a config for a subvolume, checked before it is previewed |
+| `a` | change that config's retention limits, seeded from `get-config` |
+| `D` | delete that config, after its name is typed out; `root` is refused |
 
 ![The help screen](docs/screenshots/tui-snapper-help.png)
 

@@ -1,0 +1,25 @@
+Key                    | Value
+-----------------------+------
+ALLOW_GROUPS           |
+ALLOW_USERS            |
+BACKGROUND_COMPARISON  | yes
+EMPTY_PRE_POST_CLEANUP | yes
+EMPTY_PRE_POST_MIN_AGE | 1800
+FSTYPE                 | btrfs
+NUMBER_CLEANUP         | yes
+NUMBER_LIMIT           | 50
+NUMBER_LIMIT_IMPORTANT | 10
+NUMBER_MIN_AGE         | 1800
+QGROUP                 | 1/0
+SPACE_LIMIT            | 0.5
+SUBVOLUME              | /
+SYNC_ACL               | no
+TIMELINE_CLEANUP       | yes
+TIMELINE_CREATE        | yes
+TIMELINE_LIMIT_DAILY   | 7
+TIMELINE_LIMIT_HOURLY  | 10
+TIMELINE_LIMIT_MONTHLY | 6
+TIMELINE_LIMIT_QUARTERLY | 0
+TIMELINE_LIMIT_WEEKLY  | 4
+TIMELINE_LIMIT_YEARLY  | 2
+TIMELINE_MIN_AGE       | 1800
