@@ -252,12 +252,12 @@ func TestParseMountInfoAndFilesystemOf(t *testing.T) {
 	}
 
 	for path, want := range map[string]string{
-		"/":                     BtrfsFSType,
-		"/home":                 BtrfsFSType,
-		"/home/edimar/projects": BtrfsFSType,
-		"/boot":                 "vfat",
-		"/boot/efi":             "vfat",
-		"/proc/self":            "proc",
+		"/":                   BtrfsFSType,
+		"/home":               BtrfsFSType,
+		"/home/user/projects": BtrfsFSType,
+		"/boot":               "vfat",
+		"/boot/efi":           "vfat",
+		"/proc/self":          "proc",
 	} {
 		// A btrfs subvolume is usually not a mount point of its own, so the
 		// answer has to come from the longest mount point above the path.
