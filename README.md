@@ -138,7 +138,7 @@ Upgrades then arrive with the rest of your system updates.
 ### Any distribution, static binary
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v0.2.0/tui-snapper_0.2.0_linux_amd64.tar.gz | tar -xz tui-snapper
+curl -fsSL https://github.com/tui-tools/tui-snapper/releases/download/v0.2.1/tui-snapper_0.2.1_linux_amd64.tar.gz | tar -xz tui-snapper
 sudo install -m0755 tui-snapper /usr/local/bin/tui-snapper
 ```
 
