@@ -212,7 +212,7 @@ func TestCreateCollectsItsFieldsThenPreviews(t *testing.T) {
 	if a.mode != modeConfirm {
 		t.Fatalf("after the last field the app is in mode %v, want the dialog", a.mode)
 	}
-	want := "snapper -c root create --description known good --cleanup-algorithm number"
+	want := "snapper -c root create --description 'known good' --cleanup-algorithm number"
 	if a.confirm.Command != want {
 		t.Errorf("preview = %q, want %q", a.confirm.Command, want)
 	}
