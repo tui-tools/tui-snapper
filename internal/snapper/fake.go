@@ -3,6 +3,8 @@ package snapper
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,22 +105,10 @@ func (f *Fake) Settings(_ context.Context, config string) (map[string]string, er
 }
 
 // CheckSubvolume answers the same question the real backend answers from the
-// mount table, against the sample filesystem below. It refuses the same paths
-// for the same reasons, so the demo shows the real refusals.
+// mount table and the filesystem, against the sample machine below. It walks
+// the same checks, so the demo shows the real refusals.
 func (f *Fake) CheckSubvolume(_ context.Context, path string) error {
-	if err := ValidateSubvolumePath(path); err != nil {
-		return err
-	}
-	fstype, found := FilesystemOf(path, demoMounts())
-	if !found {
-		return fmt.Errorf("no mounted filesystem holds %s", path)
-	}
-	if fstype != BtrfsFSType {
-		return fmt.Errorf(
-			"%s is on a %s filesystem, and snapper's snapshots need %s",
-			path, fstype, BtrfsFSType)
-	}
-	return nil
+	return checkSubvolume(path, demoMounts(), demoInspect)
 }
 
 // Snapshots lists one sample config's snapshots.
@@ -548,18 +538,45 @@ func demoSettings(numberLimit, timelineCreate string) map[string]string {
 }
 
 // demoMounts is the sample mount table CheckSubvolume answers from: two btrfs
-// subvolumes that already have a config, two that do not, and two paths on
-// another filesystem, so the demo can show both a config being created and the
-// refusal a wrong path gets.
+// subvolumes that already have a config, two that do not, two paths on
+// another filesystem, and the archinstall / Omarchy layout's @snapshots
+// mounted at /.snapshots, so the demo can show both a config being created and
+// each refusal a wrong path gets.
 func demoMounts() []Mount {
 	return []Mount{
 		{Point: "/", FSType: BtrfsFSType},
+		{Point: "/.snapshots", FSType: BtrfsFSType},
 		{Point: "/home", FSType: BtrfsFSType},
 		{Point: "/srv", FSType: BtrfsFSType},
 		{Point: "/var/log", FSType: BtrfsFSType},
 		{Point: "/boot", FSType: "vfat"},
 		{Point: "/tmp", FSType: "tmpfs"},
 	}
+}
+
+// demoPaths is the sample filesystem behind demoMounts, for the paths whose
+// answer is not the default. Every other path is a subvolume root with no
+// .snapshots in it, which is what a path a user types into the demo usually
+// means. /srv/www is an ordinary directory, the first refusal; /.snapshots is
+// the mounted @snapshots, which a second config for / would trip over (the
+// form stops that earlier, because / already has one); and /srv/old holds an
+// earlier config's leftover .snapshots, the second refusal in its other shape.
+var demoPaths = map[string]PathEntry{
+	"/srv/www":            {IsDir: true, Inode: 1001},
+	"/.snapshots":         {IsDir: true, Inode: SubvolumeRootInode},
+	"/home/.snapshots":    {IsDir: true, Inode: SubvolumeRootInode},
+	"/srv/old/.snapshots": {IsDir: true, Inode: SubvolumeRootInode},
+}
+
+// demoInspect is the Inspector over the sample filesystem.
+func demoInspect(path string, _ bool) (PathEntry, error) {
+	if entry, ok := demoPaths[path]; ok {
+		return entry, nil
+	}
+	if filepath.Base(path) == SnapshotsDir {
+		return PathEntry{}, fs.ErrNotExist
+	}
+	return PathEntry{IsDir: true, Inode: SubvolumeRootInode, Empty: true}, nil
 }
 
 // demoChanges is the sample comparison the diff view shows: a package upgrade

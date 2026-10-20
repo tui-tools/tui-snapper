@@ -617,11 +617,29 @@ func (a *app) collected(value string) tea.Cmd {
 		return a.reask()
 	}
 	if kind == snapper.FieldSubvolume {
+		// A subvolume that already has a config is answered from the list
+		// on screen. Its .snapshots is there because of that config, and the
+		// filesystem check would otherwise explain how to move it aside.
+		if name, ok := a.configFor(value); ok {
+			a.setStatusf(ui.StatusWarn,
+				"%s already has a snapper config: %q", value, name)
+			return a.reask()
+		}
 		a.mode = a.returnMode()
 		a.busy = true
 		return a.checkSubvolume(value)
 	}
 	return a.advance()
+}
+
+// configFor returns the config that already manages a subvolume.
+func (a *app) configFor(subvolume string) (string, bool) {
+	for _, config := range a.configs {
+		if config.Subvolume == subvolume {
+			return config.Name, true
+		}
+	}
+	return "", false
 }
 
 // validateAnswer checks one answer without touching the machine. An optional

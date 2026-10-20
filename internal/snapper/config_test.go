@@ -1,6 +1,8 @@
 package snapper
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -268,13 +270,14 @@ func TestParseMountInfoAndFilesystemOf(t *testing.T) {
 	}
 }
 
-func TestCheckSubvolume(t *testing.T) {
+// TestCheckSubvolumeOnThisMachine runs the real Inspector against a temporary
+// directory. Whether that directory is a subvolume depends on the machine
+// running the test, so this only pins the refusals that do not: a missing
+// path, a file, a relative path and the wrong filesystem.
+func TestCheckSubvolumeOnThisMachine(t *testing.T) {
 	dir := t.TempDir()
 	mounts := []Mount{{Point: "/", FSType: "ext4"}, {Point: dir, FSType: BtrfsFSType}}
 
-	if err := CheckSubvolume(dir, mounts); err != nil {
-		t.Errorf("CheckSubvolume(%q) = %v, want it accepted", dir, err)
-	}
 	// A path on a filesystem snapper cannot snapshot is refused with the
 	// filesystem named, which is the fact the user needs.
 	if err := CheckSubvolume("/", mounts); err == nil {
@@ -295,6 +298,175 @@ func TestCheckSubvolume(t *testing.T) {
 	}
 	if err := CheckSubvolume("relative", mounts); err == nil {
 		t.Error("a relative path was accepted")
+	}
+
+	// A directory the test made is never a subvolume root, whatever the
+	// filesystem, so the real Inspector has to refuse it as one.
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	var refusal *SubvolumeRefusal
+	if err := CheckSubvolume(sub, mounts); !errors.As(err, &refusal) {
+		t.Errorf("a plain directory was not refused as one: %v", err)
+	}
+}
+
+// fakeFS is an Inspector over a map, for the shapes a test machine cannot
+// produce: subvolume roots, a mounted .snapshots.
+func fakeFS(paths map[string]PathEntry) Inspector {
+	return func(path string, _ bool) (PathEntry, error) {
+		if entry, ok := paths[path]; ok {
+			return entry, nil
+		}
+		return PathEntry{}, fs.ErrNotExist
+	}
+}
+
+// TestCheckSubvolume covers tui-tools/tui-snapper#18: the two paths snapper
+// itself refuses after the confirm are refused before the preview, each with
+// a reason and the way out, and a subvolume with no .snapshots goes through.
+func TestCheckSubvolume(t *testing.T) {
+	subvolume := PathEntry{IsDir: true, Inode: SubvolumeRootInode}
+	emptySubvolume := PathEntry{IsDir: true, Inode: SubvolumeRootInode, Empty: true}
+	mounts := []Mount{
+		{Point: "/", FSType: BtrfsFSType},
+		{Point: "/.snapshots", FSType: BtrfsFSType},
+		{Point: "/boot", FSType: "vfat"},
+	}
+	cases := []struct {
+		name  string
+		path  string
+		paths map[string]PathEntry
+		// wantOK is a path that goes through; otherwise the refusal must be
+		// a SubvolumeRefusal whose reason and advice hold these.
+		wantOK     bool
+		wantReason string
+		wantAdvice []string
+		notAdvice  []string
+	}{
+		{
+			name:   "a subvolume with no .snapshots",
+			path:   "/srv/data/vol",
+			paths:  map[string]PathEntry{"/srv/data/vol": subvolume},
+			wantOK: true,
+		},
+		{
+			name:       "a directory that is not a subvolume",
+			path:       "/srv/data/notsv",
+			paths:      map[string]PathEntry{"/srv/data/notsv": {IsDir: true, Inode: 4711}},
+			wantReason: "not a subvolume",
+			wantAdvice: []string{
+				"  btrfs subvolume list /",
+				"  btrfs subvolume create /srv/data/notsv.new",
+			},
+		},
+		{
+			name: "the archinstall / Omarchy layout: @snapshots mounted at /.snapshots",
+			path: "/",
+			paths: map[string]PathEntry{
+				"/":           subvolume,
+				"/.snapshots": subvolume,
+			},
+			wantReason: "/.snapshots is already a mounted subvolume",
+			wantAdvice: []string{
+				"archinstall",
+				"  umount /.snapshots",
+				"  rmdir /.snapshots",
+				"  snapper -c root create-config -f btrfs /",
+				"  btrfs subvolume delete /.snapshots",
+				"  mkdir /.snapshots",
+				"  mount -a",
+			},
+		},
+		{
+			name: "an empty leftover .snapshots subvolume",
+			path: "/srv/data/vol",
+			paths: map[string]PathEntry{
+				"/srv/data/vol":            subvolume,
+				"/srv/data/vol/.snapshots": emptySubvolume,
+			},
+			wantReason: "/srv/data/vol/.snapshots already exists",
+			wantAdvice: []string{"  btrfs subvolume delete /srv/data/vol/.snapshots"},
+			notAdvice:  []string{"umount", "mv "},
+		},
+		{
+			name: "a .snapshots subvolume that holds something",
+			path: "/srv/data/vol",
+			paths: map[string]PathEntry{
+				"/srv/data/vol":            subvolume,
+				"/srv/data/vol/.snapshots": subvolume,
+			},
+			wantReason: "already exists",
+			wantAdvice: []string{
+				"  mv /srv/data/vol/.snapshots /srv/data/vol/.snapshots.old",
+			},
+			// Snapshot history is never offered for deletion.
+			notAdvice: []string{"delete", "rmdir", "rm "},
+		},
+		{
+			name: "an empty .snapshots directory",
+			path: "/srv/data/vol",
+			paths: map[string]PathEntry{
+				"/srv/data/vol":            subvolume,
+				"/srv/data/vol/.snapshots": {IsDir: true, Inode: 999, Empty: true},
+			},
+			wantReason: "already exists",
+			wantAdvice: []string{"  rmdir /srv/data/vol/.snapshots"},
+		},
+		{
+			name: "a .snapshots that is a file",
+			path: "/srv/data/vol",
+			paths: map[string]PathEntry{
+				"/srv/data/vol":            subvolume,
+				"/srv/data/vol/.snapshots": {Inode: 999},
+			},
+			wantReason: "already exists",
+			wantAdvice: []string{"not a directory", "  mv /srv/data/vol/.snapshots"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkSubvolume(tc.path, mounts, fakeFS(tc.paths))
+			if tc.wantOK {
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				return
+			}
+			var refusal *SubvolumeRefusal
+			if !errors.As(err, &refusal) {
+				t.Fatalf("err = %v, want a SubvolumeRefusal", err)
+			}
+			if !strings.Contains(refusal.Reason, tc.wantReason) {
+				t.Errorf("reason = %q, want it to hold %q", refusal.Reason, tc.wantReason)
+			}
+			if strings.Contains(refusal.Reason, "\n") {
+				t.Errorf("the reason is for a status line, and has a newline: %q",
+					refusal.Reason)
+			}
+			for _, want := range tc.wantAdvice {
+				if !strings.Contains(refusal.Advice, want) {
+					t.Errorf("the advice is missing %q:\n%s", want, refusal.Advice)
+				}
+			}
+			for _, not := range tc.notAdvice {
+				if strings.Contains(refusal.Advice, not) {
+					t.Errorf("the advice holds %q:\n%s", not, refusal.Advice)
+				}
+			}
+		})
+	}
+
+	// The earlier refusals keep their plain wording.
+	if err := checkSubvolume("/boot", mounts, fakeFS(map[string]PathEntry{
+		"/boot": subvolume,
+	})); err == nil || !strings.Contains(err.Error(), "vfat") {
+		t.Errorf("a vfat path: %v", err)
+	}
+	if err := checkSubvolume("/nope", mounts, fakeFS(nil)); err == nil ||
+		!strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("a missing path: %v", err)
 	}
 }
 

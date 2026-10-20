@@ -147,10 +147,27 @@ if [[ -z "$created" ]]; then
 fi
 echo "      created snapshot $created"
 
+# The scratch config of section 12, named here so cleanup can always find it.
+scratch_config="tui-smoke-$$"
+scratch_subvolume="${subvolume%/}/tui-snapper-smoke-$$"
+snapshots_dir=.snapshots
+
 # cleanup removes the snapshot again and puts the boot menu back, whatever
-# happened above, so a failed run does not leave the machine dirty.
+# happened above, so a failed run does not leave the machine dirty. The
+# scratch config and its subvolume go too, if section 12 got that far.
 cleanup() {
   sudo -n snapper -c "$config" delete "$created" >/dev/null 2>&1
+  if sudo -n snapper list-configs 2>/dev/null | grep -qE "^$scratch_config "; then
+    sudo -n snapper -c "$scratch_config" delete-config >/dev/null 2>&1
+  fi
+  # delete-config takes .snapshots with it; if it did not get that far, the
+  # nested subvolume has to go first, or the outer one cannot be deleted.
+  if sudo -n test -d "$scratch_subvolume/$snapshots_dir"; then
+    sudo -n btrfs subvolume delete "$scratch_subvolume/$snapshots_dir" >/dev/null 2>&1
+  fi
+  if sudo -n test -d "$scratch_subvolume"; then
+    sudo -n btrfs subvolume delete "$scratch_subvolume" >/dev/null 2>&1
+  fi
   if [[ "$has_limine" == true ]]; then
     sudo -n limine-snapper-sync >/dev/null 2>&1
   fi
@@ -293,6 +310,32 @@ snapper_version=$(snapper --version | sed -n 's/^snapper \([0-9][0-9.]*\).*/\1/p
 check "the probed version matches \`snapper --version\` ($snapper_version)" \
   "printf '%s' \"\$report\" | sed -n '/\"compat\": {/,/^  }/p'" \
   "\"version\": \"$snapper_version\""
+
+# 12. A config created from scratch (tui-tools/tui-snapper#18). The command is
+#     exactly the one the new-config form previews, run through snapper like
+#     every other mutation here, on a fresh subvolume nested in the config's
+#     own: the shape the form's pre-check accepts. What is asserted is that
+#     snapper takes it on this distribution's snapper, and that the tool then
+#     reads the new config by name, with its subvolume. Cleanup removes both.
+if command -v btrfs >/dev/null || sudo -n test -x /usr/sbin/btrfs; then
+  check "a fresh subvolume for a scratch config is created" \
+    "sudo -n btrfs subvolume create $scratch_subvolume" \
+    "$scratch_subvolume"
+  check "snapper creates a config from scratch for it" \
+    "sudo -n snapper -c $scratch_config create-config -f btrfs $scratch_subvolume && echo created" \
+    '^created$'
+  check "the tool reads the new config by name" \
+    "$bin --check --config $scratch_config" \
+    "\"subvolume\": \"$scratch_subvolume\""
+  check "and counts it with the others ($((config_count + 1)))" \
+    "$bin --check --config $config" \
+    "\"configs\": $((config_count + 1))"
+  check "snapper's own .snapshots subvolume is where the form expects it" \
+    "sudo -n stat -c %i $scratch_subvolume/.snapshots" \
+    '^256$'
+else
+  echo "      no btrfs(8) here, so the create-config section is skipped"
+fi
 
 # The line the lab carries back out, and `make compat` turns into the manifest's
 # tested list. The report is the same capture every assertion above used.

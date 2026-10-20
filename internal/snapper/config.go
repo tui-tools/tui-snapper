@@ -391,16 +391,8 @@ func ReadMounts(path string) ([]Mount, error) {
 // not a mount point of its own, so asking "is this path itself mounted" would
 // answer no for exactly the paths a user wants a config for.
 func FilesystemOf(path string, mounts []Mount) (string, bool) {
-	best, fstype := -1, ""
-	for _, mount := range mounts {
-		if !underMount(path, mount.Point) {
-			continue
-		}
-		if len(mount.Point) > best {
-			best, fstype = len(mount.Point), mount.FSType
-		}
-	}
-	return fstype, best >= 0
+	mount, found := mountOf(path, mounts)
+	return mount.FSType, found
 }
 
 // underMount reports whether a path is at or below a mount point.
@@ -409,32 +401,4 @@ func underMount(path, point string) bool {
 		return strings.HasPrefix(path, "/")
 	}
 	return path == point || strings.HasPrefix(path, point+"/")
-}
-
-// CheckSubvolume reports whether a path can hold a new snapper config: it has
-// to exist, be a directory, and live on a mounted btrfs filesystem. Everything
-// beyond that — whether the directory is a subvolume rather than an ordinary
-// directory — is snapper's own check, and it makes it before it writes
-// anything.
-func CheckSubvolume(path string, mounts []Mount) error {
-	if err := ValidateSubvolumePath(path); err != nil {
-		return err
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("%s cannot be read: %w", path, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", path)
-	}
-	fstype, found := FilesystemOf(path, mounts)
-	if !found {
-		return fmt.Errorf("no mounted filesystem holds %s", path)
-	}
-	if fstype != BtrfsFSType {
-		return fmt.Errorf(
-			"%s is on a %s filesystem, and snapper's snapshots need %s",
-			path, fstype, BtrfsFSType)
-	}
-	return nil
 }
