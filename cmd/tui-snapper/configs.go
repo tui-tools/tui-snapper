@@ -7,6 +7,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -137,7 +138,9 @@ func (a *app) onSettings(msg settingsMsg) (tea.Model, tea.Cmd) {
 
 // onSubvolume resolves the check on a path typed into the new-config form. A
 // path snapper could not manage sends the same prompt back with the reason,
-// which is where a user can act on it.
+// which is where a user can act on it. A refusal that comes with a way out
+// (snapper.SubvolumeRefusal) puts it under the prompt in place of the field's
+// help: the commands to run in a shell, which this tool shows and never runs.
 func (a *app) onSubvolume(msg subvolumeMsg) (tea.Model, tea.Cmd) {
 	a.busy = false
 	if a.pending == nil {
@@ -145,7 +148,12 @@ func (a *app) onSubvolume(msg subvolumeMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		a.setStatus(ui.StatusError, msg.err.Error())
-		return a, a.reask()
+		cmd := a.reask()
+		var refusal *snapper.SubvolumeRefusal
+		if errors.As(msg.err, &refusal) && a.mode == modeInput {
+			a.input.Help = refusal.Advice
+		}
+		return a, cmd
 	}
 	return a, a.advance()
 }

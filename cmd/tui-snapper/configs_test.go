@@ -126,6 +126,67 @@ func TestCreateConfigRefusesAPathSnapperCannotManage(t *testing.T) {
 	}
 }
 
+// TestCreateConfigExplainsWhatSnapperWouldRefuse is tui-tools/tui-snapper#18:
+// the paths snapper itself refuses only after the confirm are sent back to the
+// prompt before the preview, with the reason on the status line and the way
+// out under the prompt, and nothing runs.
+func TestCreateConfigExplainsWhatSnapperWouldRefuse(t *testing.T) {
+	a, fake := newTestApp(t)
+	openConfigScreen(t, a, "root")
+	press(t, a, "n")
+
+	for _, tc := range []struct {
+		path       string
+		wantStatus string
+		wantHelp   string
+	}{
+		// An ordinary directory on btrfs, not a subvolume.
+		{"/srv/www", "not a subvolume", "btrfs subvolume list /srv"},
+		// A subvolume with an earlier config's .snapshots still in it.
+		{"/srv/old", "/srv/old/.snapshots already exists",
+			"mv /srv/old/.snapshots /srv/old/.snapshots.old"},
+		// A subvolume that already has a config is answered from the list:
+		// its .snapshots belongs to that config and must not be moved.
+		{"/", `already has a snapper config: "root"`, ""},
+	} {
+		clearInput(t, a)
+		typeText(t, a, tc.path)
+		press(t, a, "enter")
+		if a.mode != modeInput {
+			t.Fatalf("%s left the app in mode %v, want the prompt again", tc.path, a.mode)
+		}
+		if !strings.Contains(a.status, tc.wantStatus) {
+			t.Errorf("%s: status = %q, want it to hold %q", tc.path, a.status, tc.wantStatus)
+		}
+		if tc.wantHelp != "" && !strings.Contains(a.input.Help, tc.wantHelp) {
+			t.Errorf("%s: the prompt's help is missing %q:\n%s",
+				tc.path, tc.wantHelp, a.input.Help)
+		}
+		if tc.wantHelp == "" && strings.Contains(a.input.Help, "as root") {
+			t.Errorf("%s: the prompt offers commands it should not:\n%s",
+				tc.path, a.input.Help)
+		}
+		// The explanation has to be readable where it is shown.
+		if view := a.View(); tc.wantHelp != "" && !strings.Contains(view, tc.wantHelp) {
+			t.Errorf("%s: the advice is not on screen:\n%s", tc.path, view)
+		}
+	}
+	if len(fake.Commands()) != 0 {
+		t.Fatalf("a refused path ran %d commands", len(fake.Commands()))
+	}
+
+	// A path that is fine goes on to the name prompt, with no advice left over.
+	clearInput(t, a)
+	typeText(t, a, "/srv")
+	press(t, a, "enter")
+	if a.mode != modeInput || a.field.Kind != snapper.FieldConfigName {
+		t.Fatalf("a good path did not reach the name prompt (mode %v)", a.mode)
+	}
+	if strings.Contains(a.input.Help, "as root") {
+		t.Errorf("the name prompt kept the advice:\n%s", a.input.Help)
+	}
+}
+
 func TestEditConfigLimitsWritesOnlyWhatChanged(t *testing.T) {
 	a, fake := newTestApp(t)
 	openConfigScreen(t, a, "home")

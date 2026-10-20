@@ -214,7 +214,14 @@ exact `snapper` command line first.
 only a picker. `n` creates a config for a subvolume: type the path, the tool
 checks that it exists and is on a mounted btrfs filesystem before going on,
 suggests the name that path usually gets, and previews
-`snapper -c <name> create-config -f btrfs <subvolume>`. `a` on a config edits
+`snapper -c <name> create-config -f btrfs <subvolume>`. The two paths snapper
+itself would refuse after the confirm are sent back to the prompt first, with
+the reason and the commands that get past it: a directory that is not the top
+of a subvolume, and a subvolume that already has a `.snapshots` — on an
+archinstall or Omarchy layout that is the `@snapshots` subvolume mounted from
+`/etc/fstab`, and the prompt shows the usual umount / create-config / remount
+sequence. Those commands are shown, never run: they move things around a
+subvolume that holds snapshot history, which is a job for a shell. `a` on a config edits
 its retention limits — `NUMBER_LIMIT`, `NUMBER_LIMIT_IMPORTANT`,
 `TIMELINE_CREATE`, the five `TIMELINE_LIMIT_*` keys and
 `EMPTY_PRE_POST_CLEANUP` — seeded from `snapper get-config`, so the form opens
