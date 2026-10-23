@@ -68,23 +68,56 @@ func (c *typedConfirm) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the dialog: what is about to happen, the exact command, and the
 // prompt.
+//
+// Everything is wrapped to the dialog's inner width with the kit's own
+// wrappers, the same ones ui.Confirm uses, so nothing in it is cut. It used to
+// render the body as one long line and cap the box with MaxWidth, which
+// truncates rather than wraps: on a 160-column terminal the delete-config
+// warning lost its last sentence, "This cannot be undone.", together with the
+// right-hand border.
 func (c *typedConfirm) View(t theme.Theme, width, height int) string {
-	lines := []string{t.Danger.Render(c.title)}
+	content := typedConfirmContent(t, width)
+
+	lines := wrapStyled(ui.Wrap(c.title, content), t.Danger)
 	if c.body != "" {
-		lines = append(lines, "", t.Base.Render(c.body))
+		lines = append(lines, "")
+		lines = append(lines, wrapStyled(ui.WrapBody(c.body, content), t.Base)...)
 	}
 	if c.command != "" {
-		lines = append(lines, "",
-			t.Muted.Render("Command to run:"),
-			t.Command.Render("$ "+c.command))
+		lines = append(lines, "", t.Muted.Render("Command to run:"))
+		lines = append(lines, wrapStyled(ui.WrapBody("$ "+c.command, content), t.Command)...)
 	}
-	lines = append(lines, "",
-		t.Base.Render("Type "+strconv.Quote(c.word)+" and press enter to confirm:"),
-		c.input.Model.View(),
+	lines = append(lines, "")
+	lines = append(lines, wrapStyled(ui.Wrap("Type "+strconv.Quote(c.word)+
+		" and press enter to confirm:", content), t.Base)...)
+	// The input scrolls its own text inside the width it is given; without
+	// one a long answer would widen the box past the screen.
+	c.input.Model.Width = max(content-lipgloss.Width(c.input.Model.Prompt)-1, 1)
+	lines = append(lines, c.input.Model.View(),
 		"",
 		t.Key.Render("enter")+t.KeyDesc.Render(" confirm    ")+
 			t.Key.Render("esc")+t.KeyDesc.Render(" cancel"))
 
-	box := t.Dialog.MaxWidth(max(width-4, 20)).Render(strings.Join(lines, "\n"))
+	box := t.Dialog.Render(strings.Join(lines, "\n"))
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
+}
+
+// typedConfirmMinContent is the narrowest text column the dialog lays out to,
+// matching the kit's dialogs: below it the terminal clips the box instead.
+const typedConfirmMinContent = 20
+
+// typedConfirmContent is the width the dialog's text has to work with: the
+// screen less the two cells of margin on each side the kit's dialogs keep,
+// less the dialog style's own border and padding.
+func typedConfirmContent(t theme.Theme, width int) int {
+	return max(width-4-t.Dialog.GetHorizontalFrameSize(), typedConfirmMinContent)
+}
+
+// wrapStyled applies one style to every line of a wrapped block.
+func wrapStyled(lines []string, style lipgloss.Style) []string {
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = style.Render(line)
+	}
+	return out
 }
